@@ -105,7 +105,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	private Map<Server, Long> trafficStats;
 	private Map<Short, RoundRobinServers> portNumberServersMap;
-	private int lastServer = 0;
+	
 
 	/**
 	 * @param floodlightProvider
@@ -120,7 +120,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	public String getName() {
 		return "LoadBalancer";
 	}
-
+	
 	/**
 	 * Processes a OFPacketIn message. If the switch has learned the MAC to port
 	 * mapping for the pair it will write a FlowMod for. If the mapping has not
@@ -168,7 +168,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	private void processRuleAndPushPacket(Server forwardServer,
 			Server reverseServer, IOFSwitch sw, OFPacketIn pi) {
-
+	
 		OFFlowMod rule = new OFFlowMod();
 		rule.setType(OFType.FLOW_MOD);
 		rule.setCommand(OFFlowMod.OFPFC_ADD);
@@ -190,7 +190,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
-
+		
 		// Add action to re-write destination MAC to the MAC of the chosen
 		// server
 		OFAction rewriteMAC = new OFActionDataLayerDestination(forwardServer
@@ -356,7 +356,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	 * @return Whether to continue processing this message or stop.
 	 * @throws IOException
 	 * @throws ExecutionException
-	 * @throws InterruptedException
+	 * @throws InterruptedExceptionOFMatch match = flowRemovedMessage.getMatch();
 	 */
 	private Command processFlowRemovedMessage(IOFSwitch sw,
 			OFFlowRemoved flowRemovedMessage) throws IOException,
@@ -489,7 +489,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
 		return l;
 	}
-
+	
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
 		Map<Class<? extends IFloodlightService>, IFloodlightService> m = new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
