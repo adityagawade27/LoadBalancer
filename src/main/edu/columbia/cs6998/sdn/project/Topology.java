@@ -45,6 +45,7 @@ public class Topology implements ITopology {
         initialize();
     }
 
+    
     private void initialize() {
         //Read the topology from the file here
         readFromFile();

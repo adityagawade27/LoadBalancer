@@ -13,7 +13,6 @@ import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFMessageListener;
 import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.core.IListener.Command;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
@@ -58,41 +57,14 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	private final static short IDLE_TIMEOUT = 60; // in seconds
 	private final static short HARD_TIMEOUT = 0; // infinite
 	
-	private Map<Short, ArrayList<Server>> portNumberServersMap;
-	private Map<Short, TreeMap<Integer, Integer>> portServerPacketCountMap;
+	private Map<Short, ArrayList<Server>> portNumberServersMap= new HashMap<Short, ArrayList<Server>>();
+	private Map<Short, TreeMap<String, Integer>> portServerPacketCountMap;
+	private ArrayList<Server> appServers;
 
 	
-	private static class Server
-	{
-		private int ip;
-		private byte[] mac;
-		private short port;
-		
-		public Server(String ip, String mac, short port) {
-			this.ip = IPv4.toIPv4Address(ip);
-			this.mac = Ethernet.toMACAddress(mac);
-			this.port = port;
-		}
-		
-		public int getIP() {
-			return this.ip;
-		}
-		
-		public byte[] getMAC() {
-			return this.mac;
-		}
-		
-		public short getPort() {
-			return this.port;
-		}
-	}
-	
-	// TODO Create list of servers to which traffic should be balanced
-	final static Server[] SERVERS = {
-		new Server("10.0.0.1", "00:00:00:00:00:01", (short)1),
-		new Server("10.0.0.2", "00:00:00:00:00:02", (short)2)
-	};
+	private Topology topology;
 	private int lastServer = 0;
+	
 	
 	/**
 	 * Provides an identifier for our OFMessage listener.
@@ -148,10 +120,23 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			throws FloodlightModuleException {
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 		logger = LoggerFactory.getLogger(LoadBalancer.class);
-		portServerPacketCountMap = new HashMap<Short, TreeMap<Integer, Integer>>();
-		portNumberServersMap = new HashMap<Short, ArrayList<Server>>();
+		portServerPacketCountMap = new HashMap<Short, TreeMap<String, Integer>>();
+		
+		topology = Topology.getInstance();
+		initializeAppServers();
 	}
 
+	public void initializeAppServers(){
+		
+		appServers = new ArrayList<Server>();
+		appServers.add(new Server("10.0.0.3",topology.getMacAddressFromIP("10.0.0.3")));
+		appServers.add(new Server("10.0.0.4",topology.getMacAddressFromIP("10.0.0.4")));
+		appServers.add(new Server("10.0.0.5",topology.getMacAddressFromIP("10.0.0.5")));
+		appServers.add(new Server("10.0.0.6",topology.getMacAddressFromIP("10.0.0.6")));
+		
+		portNumberServersMap.put((short)8080,appServers);
+	}
+	
 	/**
 	 * Tells the Floodlight core we are interested in PACKET_IN messages.
 	 * Important to override! 
@@ -201,28 +186,33 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 		
-		Integer destIPAddress = match.getNetworkDestination();
-		String destMACAddress = new String(match.getDataLayerDestination());
+		Integer curDestIPAddress = match.getNetworkDestination();
+		String curDestIPString = IPv4.fromIPv4Address(curDestIPAddress);
+		//String destMACAddress = new String(match.getDataLayerDestination());
 
-		Server server = new Server(IPv4.fromIPv4Address(destIPAddress), destMACAddress,(short)0);
-
-		if (destIPAddress == LOAD_BALANCER_IP) {
-
-			logger.info("Virtual IP PKT received ");
-			//logger.info("Destination MAC Address " + server.getMAC());
-			//logger.info("Destination IP Address " + server.getIP());
+		
+		Node currentSwitch = topology.getTopology().get(sw.getStringId());
+		Server destServer = null;
+	
+		if (curDestIPAddress == LOAD_BALANCER_IP) {
 			
-			server = getDestServer(sw, pi);
-			//server = getNextHop(server, sw, pi);
-			processRuleAndPushPacket(server, sw, pi);
-
+			destServer = getDestServer(sw, pi);
+			String destIP = IPv4.fromIPv4Address(destServer.getIP());	
+			short outPort = topology.getNextHop(destIP,currentSwitch);
+			destServer.setPort(outPort);
+	
 		} else {
 
-			//server = getNextHop(server, sw, pi); // TODO
-			processRuleAndPushPacket(server, sw, pi);
+			short outPort = topology.getNextHop(curDestIPString ,currentSwitch);
+			destServer = new Server();
+			destServer.setPort(outPort);
+			destServer.setIP(curDestIPString);
+			destServer.setMAC(topology.getMacAddressFromIP(curDestIPString));
+			
 
 		}
-
+		
+		processRuleAndPushPacket(destServer, sw, pi);
 		return Command.CONTINUE;
 	}
 	
@@ -240,13 +230,15 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		// Collect Statistics for each flow that was removed
 		portServerPacketCountMap.clear();
-		/*if (isNextHop(sw, destIP)) {
+		Node currentSwitch = topology.getTopology().get(sw.getStringId());
+	
+		if (topology.isNextHop(currentSwitch,IPv4.fromIPv4Address(destIP))) {
 
 			Integer count = (int) (portServerPacketCountMap.get(appPort).get(
-					destIP) + flowRemovedMessage.getPacketCount());
-			portServerPacketCountMap.get(appPort).put(destIP, count);
+					IPv4.fromIPv4Address(destIP)) + flowRemovedMessage.getPacketCount());
+			portServerPacketCountMap.get(appPort).put(IPv4.fromIPv4Address(destIP), count);
 
-		}*/
+		}
 
 		if (logger.isTraceEnabled()) {
 			logger.trace("{} flow entry removed {}", sw,
@@ -282,9 +274,11 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		} else { // Get least loaded server
 
-			Integer destIP = portServerPacketCountMap.get(appPort).firstEntry()
+			String destIP = portServerPacketCountMap.get(appPort).firstEntry()
 					.getKey();
-			Server server = new Server(IPv4.fromIPv4Address(destIP),null,(short)0);
+			Server server = new Server();
+			server.setIP(destIP);
+			server.setMAC(topology.getMacAddressFromIP(destIP));
 			return server;
 
 		}
@@ -320,7 +314,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
 		
 		// Add action to re-write destination MAC to the MAC of the chosen server
-		OFAction rewriteMAC = new OFActionDataLayerDestination(server.getMAC());
+		OFAction rewriteMAC = new OFActionDataLayerDestination(server.getMAC().getBytes());
 		actions.add(rewriteMAC);
 		
 		// Add action to re-write destination IP to the IP of the chosen server
@@ -340,7 +334,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// Specify the length of the rule structure
 		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
 		
-		//logger.debug("Actions length="+ (rule.getLength() - OFFlowMod.MINIMUM_LENGTH));
+		//logger.debug("Actions length="+ (rule.getLength() - destIPOFFlowMod.MINIMUM_LENGTH));
 		
 		//logger.debug("Install rule for forward direction for flow: " + rule);
 			

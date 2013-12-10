@@ -1,0 +1,11 @@
+Starting floodlight server ...
+INFO [net.floodlightcontroller.core.module.FloodlightModuleLoader:main] Loading modules from file ./resources/floodlighthw1.properties
+INFO [net.floodlightcontroller.core.internal.Controller:main] Controller role set to null
+INFO [net.floodlightcontroller.core.internal.Controller:main] Listening for switch connections on 0.0.0.0/0.0.0.0:6633
+INFO [net.floodlightcontroller.core.internal.Controller:New I/O server worker #1-1] New switch connection from /127.0.0.1:53344
+INFO [net.floodlightcontroller.core.internal.Controller:New I/O server worker #1-2] New switch connection from /127.0.0.1:53345
+INFO [net.floodlightcontroller.core.internal.Controller:New I/O server worker #1-1] New switch connection from /127.0.0.1:53346
+INFO [net.floodlightcontroller.jython.JythonServer:debugserver-main] Starting DebugServer on port 6655
+INFO [net.floodlightcontroller.core.internal.Controller:New I/O server worker #1-1] Disconnected switch OFSwitchImpl [/127.0.0.1:53344 DPID[00:00:00:00:00:00:00:01]]
+INFO [net.floodlightcontroller.core.internal.Controller:New I/O server worker #1-2] Disconnected switch OFSwitchImpl [/127.0.0.1:53345 DPID[00:00:00:00:00:00:00:03]]
+INFO [net.floodlightcontroller.core.internal.Controller:New I/O server worker #1-1] Disconnected switch OFSwitchImpl [/127.0.0.1:53346 DPID[00:00:00:00:00:00:00:02]]
