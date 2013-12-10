@@ -34,6 +34,16 @@ class RouteRREntity {
     public void incrementInstance() {
         currentInstance = (short) ((currentInstance + 1) % routes.size());
     }
+
+    @Override
+    public String toString() {
+        String retVal = "";
+        int i = 0;
+        for (FinalRoute route : routes) {
+            retVal += "Route# " + i + "=\n" + route.toString();
+        }
+        return retVal;
+    }
 }
 
 class FinalRoute {
@@ -83,12 +93,28 @@ class FinalRoute {
             route.add(new Link(new NodeNodePair(null, node)));
         } else {
             Node dstEndHost = route.get(route.size() - 1).getPair().getDstEndHost();
-            route.add(new Link(new NodeNodePair(dstEndHost, node)));
+            Link link = new Link(new NodeNodePair(dstEndHost, node));
+            for (Map.Entry<Short, Link> entry : dstEndHost.getNeighbors().entrySet()) {
+                if (entry.getValue().getPair().getDstEndHost().getName().equals(node.getName())) {
+                    link.setSrcPort(entry.getKey());
+                    link.setDstPort(entry.getValue().getDstPort());
+                }
+            }
+            route.add(link);
         }
     }
 
     public void append(ArrayList<Link> param_route) {
         route.addAll(param_route);
+    }
+
+    @Override
+    public String toString() {
+        String retVal = "";
+        for (Link link : route) {
+            retVal += link.toString();
+        }
+        return retVal;
     }
 }
 
@@ -136,6 +162,18 @@ class Link {
     public Double getCost() {
         return cost;
     }
+
+    @Override
+    public String toString() {
+        String retVal = "(";
+        Node srcNode = getPair().getSrcNode();
+        Node dstEndHost = getPair().getDstEndHost();
+        if(srcNode != null) {
+            retVal += srcNode.getName() + "," + getSrcPort();
+        }
+        retVal += ")->(" + dstEndHost.getName() + "," + getDstPort() + ")";
+        return retVal;
+    }
 }
 
 class NodeNodePair {
@@ -153,6 +191,11 @@ class NodeNodePair {
 
     public Node getDstEndHost() {
         return dstEndHost;
+    }
+
+    @Override
+    public String toString() {
+        return "(" + srcNode.getName() + "->" + dstEndHost.getName() + ")";
     }
 }
 

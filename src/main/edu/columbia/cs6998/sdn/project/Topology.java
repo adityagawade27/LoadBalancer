@@ -49,7 +49,7 @@ public class Topology implements ITopology {
     private void initialize() {
         readFromFile();
         preprocessLinks();
-        //calculateRoutes();
+        calculateRoutes();
     }
 
     private void calculateRoutes() {
@@ -142,8 +142,8 @@ public class Topology implements ITopology {
     public static void main(String args[]) {
         HashMap<String, Node> nodeHashMap = getInstance().getTopology();
         System.out.println(nodeHashMap);
-        //HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = getInstance().getRoutes();
-        //System.out.println(rrEntityHashMap);
+        HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = getInstance().getRoutes();
+        System.out.println(rrEntityHashMap);
     }
 
     private List<FinalRoute> calcRoutes(Node swtch, Node host) {
@@ -161,18 +161,30 @@ public class Topology implements ITopology {
             last = tempRoute.getLastName();
             if (last == host.getName()) {
                 retVal.add(new FinalRoute(tempRoute));
+                continue;
             }
-            for (Link link : host.getNeighbors().values()) {
+            for (Link link : getTopology().get(last).getNeighbors().values()) {
                 String id = link.getPair().getDstEndHost().getName();
-                if (!tempRoute.getRoute().contains(id)) {
+                if (!routeContainsNode(tempRoute, id)) {
                     newRoute = new FinalRoute();
                     newRoute.append(tempRoute.getRoute());
+                    newRoute.append(getTopology().get(id));
                     queue.push(newRoute);
                 }
             }
         }
         System.out.println("Exiting calcRoutes");
         return retVal;
+    }
+
+    private boolean routeContainsNode(FinalRoute tempRoute, String id) {
+        ArrayList<Link> route = tempRoute.getRoute();
+        for (Link link : route) {
+            if (link.getPair().getDstEndHost().getName().equals(id)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
