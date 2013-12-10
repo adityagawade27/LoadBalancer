@@ -1,6 +1,6 @@
 package main.edu.columbia.cs6998.sdn.project;
 
-import com.sun.istack.internal.Nullable;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -122,13 +122,13 @@ class NodeNodePair {
 
 class Node {
     //IP Address of the host
-    @Nullable
+    
     String ipAddress;
 
     //Mac address of the host
     String macAddress;
 
-    //Check if the node is an end host
+    //Check if the node is an end hostflowMod
     Boolean isHost;
 
     //Check if the switch is a border switch

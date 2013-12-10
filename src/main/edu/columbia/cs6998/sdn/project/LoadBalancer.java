@@ -100,8 +100,8 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	// Load Balancer Component
 	private final static int LOAD_BALANCER_IP = IPv4
 			.toIPv4Address("10.0.0.100");
-	private final static byte[] LOAD_BALANCER_MAC = Ethernet
-			.toMACAddress("00:00:00:00:00:FE");
+	// private final static byte[] LOAD_BALANCER_MAC = Ethernet
+	// .toMACAddress("00:00:00:00:00:FE");
 
 	private Map<Short, ArrayList<Server>> portNumberServersMap;
 	private Map<Short, TreeMap<Integer, Integer>> portServerPacketCountMap;
@@ -137,20 +137,27 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		// Read in packet data headers by using OFMatch
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
+		
 		Integer destIPAddress = match.getNetworkDestination();
+		String destMACAddress = new String(match.getDataLayerDestination());
 
 		Server server = new Server();
 		server.setIP(IPv4.fromIPv4Address(destIPAddress));
+		server.setMAC(destMACAddress);
 
 		if (destIPAddress == LOAD_BALANCER_IP) {
 
-			server = getDestServer(sw, pi);
-			server = getNextHop(server,sw,pi);
-			processRuleAndPushPacket(server, sw, pi, true);
+			log.info("Virtual IP PKT received ");
+			log.info("Destination MAC Address " + server.getMAC());
+			log.info("Destination IP Address " + server.getIP());
+			
+			//server = getDestServer(sw, pi);
+			//server = getNextHop(server, sw, pi);
+			//processRuleAndPushPacket(server, sw, pi, true);
 
 		} else {
 
-			server = getNextHop(server, sw, pi); // TODO
+			//server = getNextHop(server, sw, pi); // TODO
 			processRuleAndPushPacket(server, sw, pi, false);
 
 		}
@@ -186,7 +193,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	}
 
 	private void processRuleAndPushPacket(Server forwardServer, IOFSwitch sw,
-			OFPacketIn pi, Boolean rewrite) {
+			OFPacketIn pi, Boolean rewriteAddr) {
 
 		OFFlowMod rule = new OFFlowMod();
 		rule.setType(OFType.FLOW_MOD);
@@ -195,9 +202,8 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 		match.setWildcards(~OFMatch.OFPFW_ALL);
-		match.setNetworkDestination(forwardServer.getIP());
-
 		rule.setMatch(match);
+
 		rule.setIdleTimeout(IDLE_TIMEOUT_DEFAULT);
 		rule.setHardTimeout(HARD_TIMEOUT_DEFAULT);
 		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
@@ -205,26 +211,22 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		short actionsLength = 0;
 		ArrayList<OFAction> actions = null;
 
-		if (rewrite) {
+		actions = new ArrayList<OFAction>();
 
-			actions = new ArrayList<OFAction>();
+		OFAction rewriteMAC = new OFActionDataLayerDestination(forwardServer
+				.getMAC().getBytes());
+		actions.add(rewriteMAC);
 
-			OFAction rewriteMAC = new OFActionDataLayerDestination(
-					forwardServer.getMAC().getBytes());
-			actions.add(rewriteMAC);
+		OFAction rewriteIP = new OFActionNetworkLayerDestination(
+				forwardServer.getIP());
+		actions.add(rewriteIP);
 
-			OFAction rewriteIP = new OFActionNetworkLayerDestination(
-					forwardServer.getIP());
-			actions.add(rewriteIP);
+		OFAction outputTo = new OFActionOutput(forwardServer.getPort());
+		actions.add(outputTo);
 
-			OFAction outputTo = new OFActionOutput(forwardServer.getPort());
-			actions.add(outputTo);
-
-			rule.setActions(actions);
-
-			actionsLength = (short) (OFActionDataLayerDestination.MINIMUM_LENGTH
-					+ OFActionNetworkLayerDestination.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH);
-		}
+		rule.setActions(actions);
+		actionsLength = (short) (OFActionDataLayerDestination.MINIMUM_LENGTH
+				+ OFActionNetworkLayerDestination.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH);
 
 		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
 
@@ -238,41 +240,42 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	}
 
-	private void pushPacket(IOFSwitch sw, OFPacketIn pi,
+	private void pushPacket(IOFSwitch sw, OFPacketIn pi, 
 			ArrayList<OFAction> actions, short actionsLength) {
-
+		
 		// create an OFPacketOut for the pushed packet
-		OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
-				.getMessage(OFType.PACKET_OUT);
-
-		// Update the inputPort and bufferID
-		po.setInPort(pi.getInPort());
-		po.setBufferId(pi.getBufferId());
-
-		// Set the actions to apply for this packet
+        OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
+                		.getMessage(OFType.PACKET_OUT);        
+        
+        // Update the inputPort and bufferID
+        po.setInPort(pi.getInPort());
+        po.setBufferId(pi.getBufferId());
+                
+        // Set the actions to apply for this packet		
 		po.setActions(actions);
 		po.setActionsLength(actionsLength);
-
-		// Set data if it is included in the packet in but buffer id is NONE
-		if (pi.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
-			byte[] packetData = pi.getPacketData();
-			po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
-					+ po.getActionsLength() + packetData.length));
-			po.setPacketData(packetData);
-		} else {
-			po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
-					+ po.getActionsLength()));
-		}
-
-		log.debug("Push packet to switch: " + po);
-
-		// Push the packet to the switch
-		try {
-			sw.write(po, null);
-		} catch (IOException e) {
-			log.error("failed to write packetOut: ", e);
-		}
+	        
+        // Set data if it is included in the packet in but buffer id is NONE
+        if (pi.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
+            byte[] packetData = pi.getPacketData();
+            po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
+                    + po.getActionsLength() + packetData.length));
+            po.setPacketData(packetData);
+        } else {
+            po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
+                    + po.getActionsLength()));
+        }        
+        
+       log.debug("Push packet to switch: "+po);
+        
+        // Push the packet to the switch
+        try {
+            sw.write(po, null);
+        } catch (IOException e) {
+            log.error("failed to write packetOut: ", e);
+        }
 	}
+	
 
 	/**
 	 * Processes a flow removed message. We will delete the learned MAC mapping
@@ -302,13 +305,13 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 		// Collect Statistics for each flow that was removed
 		portServerPacketCountMap.clear();
-		if (isNextHop(sw, destIP)) {
+		/*if (isNextHop(sw, destIP)) {
 
 			Integer count = (int) (portServerPacketCountMap.get(appPort).get(
 					destIP) + flowRemovedMessage.getPacketCount());
 			portServerPacketCountMap.get(appPort).put(destIP, count);
 
-		}
+		}*/
 
 		if (log.isTraceEnabled()) {
 			log.trace("{} flow entry removed {}", sw,
@@ -349,7 +352,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 			break;
 		}
 		log.error("received an unexpected message {} from switch {}", msg, sw);
-		return Command.CONTINUE;
+		return Command.STOP;
 	}
 
 	@Override
@@ -397,28 +400,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	private void initializeAppServers() {
 
-		// Hardcoding Server Addresses for now
-
-		ArrayList<Server> servers = new ArrayList<Server>();
-
-		Server h3 = new Server();
-		h3.setIP("10.0.0.3");
-
-		Server h4 = new Server();
-		h4.setIP("10.0.0.4");
-
-		Server h5 = new Server();
-		h5.setIP("10.0.0.5");
-
-		Server h6 = new Server();
-		h6.setIP("10.0.0.6");
-
-		servers.add(h3);
-		servers.add(h4);
-		servers.add(h5);
-		servers.add(h6);
-
-		portNumberServersMap.put((short) 8080, servers);
+		//portNumberServersMap.put((short) 8080,fetchAppServerList(8080));
 
 	}
 

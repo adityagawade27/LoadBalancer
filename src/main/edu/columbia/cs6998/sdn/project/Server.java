@@ -37,4 +37,9 @@ public class Server {
 		return macAddress;
 	}
 
+	public void setMAC(String destMACAddress) {
+		macAddress = destMACAddress;
+		
+	}
+
 }
