@@ -8,34 +8,30 @@ public class Server {
 	private String macAddress;
 	private short port;
 
-	public Server(int loadBalancerIp, byte[] loadBalancerMac) {
-		ipAddress = IPv4.fromIPv4Address(loadBalancerIp);
-		macAddress = new String(loadBalancerMac);
+	public Server(String ipAddress, String macAddress) {
+		super();
+		this.ipAddress = ipAddress;
+		this.macAddress = macAddress;
 	}
 
 	public Server() {
 		// TODO Auto-generated constructor stub
 	}
-	
-	public Server(String ip){
-		ipAddress = ip;
-	}
-	public Server(String ip, String mac) {
-		ipAddress = ip;
-		macAddress = mac;
-	}
 
-	public void setIP(int ip){
-		
-		ipAddress = IPv4.fromIPv4Address(ip);
-	}
-
-	public int getIP() {
-		return IPv4.toIPv4Address(ipAddress.getBytes());
+	public String getIP() {
+		return ipAddress;
 	}
 
 	public void setIP(String ipAddress) {
 		this.ipAddress = ipAddress;
+	}
+
+	public String getMAC() {
+		return macAddress;
+	}
+
+	public void setMAC(String macAddress) {
+		this.macAddress = macAddress;
 	}
 
 	public short getPort() {
@@ -45,14 +41,7 @@ public class Server {
 	public void setPort(short port) {
 		this.port = port;
 	}
-
-	public String getMAC() {
-		return macAddress;
-	}
-
-	public void setMAC(String destMACAddress) {
-		macAddress = destMACAddress;
-		
-	}
+	
+	
 
 }
