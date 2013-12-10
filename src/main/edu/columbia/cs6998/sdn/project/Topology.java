@@ -11,8 +11,12 @@ import java.util.*;
 
 public class Topology implements ITopology {
 
+    public HashMap<String, Node> getTopology() {
+        return topology;
+    }
+
     private HashMap<String, Node> topology;
-    private HashMap<String, Short> ipToNodeMap;
+    private HashMap<String, String> ipToNodeMap;
     private ArrayList<Node> endHosts;
     private ArrayList<Node> switches;
     private HashMap<NodeNodePair, RouteRREntity> routes;
@@ -26,9 +30,17 @@ public class Topology implements ITopology {
         return instance;
     }
 
+    public HashMap<NodeNodePair, RouteRREntity> getRoutes() {
+        return routes;
+    }
+
     private Topology() {
         topology = new HashMap<>();
         ipToNodeMap = new HashMap<>();
+        endHosts = new ArrayList<>();
+        switches = new ArrayList<>();
+        routes = new HashMap<>();
+
         initialize();
     }
 
@@ -38,7 +50,7 @@ public class Topology implements ITopology {
         preprocessLinks();
         for (Node swtch : switches) {
             for (Node host : endHosts) {
-                List<FinalRoute> localRoutes = getRoutes(swtch, host);
+                List<FinalRoute> localRoutes = calcRoutes(swtch, host);
                 routes.put(new NodeNodePair(swtch, host), new RouteRREntity(localRoutes, (short) 0));
             }
         }
@@ -100,14 +112,36 @@ public class Topology implements ITopology {
             node.setIsHost(true);
         node.addPort(Short.parseShort(s1));
         topology.put(node.getName(), node);
+        ipToNodeMap.put(node.getIpAddress(),node.getName());
         return node;
     }
 
-    public static void main(String args[]) {
-        Topology.getInstance();
+    public String getMacAddressFromIP(String ipAddress) {
+        return getTopology().get(ipToNodeMap.get(ipAddress)).getMacAddress();
     }
 
-    private List<FinalRoute> getRoutes(Node swtch, Node host) {
+    //Ideally this should be calculated from the route
+    //and not the neighbor info, but will work for now
+    public boolean isNextHop(Node node, String ipAddress) {
+        boolean found = false;
+        Map<Short, Link> neighbors = node.getNeighbors();
+        for (Link link : neighbors.values()) {
+            if(link.getPair().getDstEndHost().getName().equals(ipToNodeMap.get(ipAddress))) {
+                found = true;
+                break;
+            }
+        }
+        return found;
+    }
+
+    public static void main(String args[]) {
+        HashMap<String, Node> nodeHashMap = getInstance().getTopology();
+        System.out.println(nodeHashMap);
+        HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = getInstance().getRoutes();
+        System.out.println(rrEntityHashMap);
+    }
+
+    private List<FinalRoute> calcRoutes(Node swtch, Node host) {
         List<FinalRoute> retVal = new ArrayList<>();
         Deque<FinalRoute> queue = new ArrayDeque<>();
         String last;
