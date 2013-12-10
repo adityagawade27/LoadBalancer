@@ -1,5 +1,6 @@
 package main.edu.columbia.cs6998.sdn.project;
 
+import javax.xml.bind.SchemaOutputResolver;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -48,6 +49,10 @@ public class Topology implements ITopology {
         //Read the topology from the file here
         readFromFile();
         preprocessLinks();
+        //calculateRoutes();
+    }
+
+    private void calculateRoutes() {
         for (Node swtch : switches) {
             for (Node host : endHosts) {
                 List<FinalRoute> localRoutes = calcRoutes(swtch, host);
@@ -137,11 +142,12 @@ public class Topology implements ITopology {
     public static void main(String args[]) {
         HashMap<String, Node> nodeHashMap = getInstance().getTopology();
         System.out.println(nodeHashMap);
-        HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = getInstance().getRoutes();
-        System.out.println(rrEntityHashMap);
+        //HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = getInstance().getRoutes();
+        //System.out.println(rrEntityHashMap);
     }
 
     private List<FinalRoute> calcRoutes(Node swtch, Node host) {
+        System.out.println("Entering calcRoutes");
         List<FinalRoute> retVal = new ArrayList<>();
         Deque<FinalRoute> queue = new ArrayDeque<>();
         String last;
@@ -165,7 +171,7 @@ public class Topology implements ITopology {
                 }
             }
         }
-
+        System.out.println("Exiting calcRoutes");
         return retVal;
     }
 

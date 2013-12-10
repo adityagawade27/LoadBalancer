@@ -79,8 +79,12 @@ class FinalRoute {
     }
 
     void append(Node node) {
-        Node dstEndHost = route.get(route.size() - 1).getPair().getDstEndHost();
-        route.add(new Link(new NodeNodePair(dstEndHost, node)));
+        if(route.isEmpty()) {
+            route.add(new Link(new NodeNodePair(null, node)));
+        } else {
+            Node dstEndHost = route.get(route.size() - 1).getPair().getDstEndHost();
+            route.add(new Link(new NodeNodePair(dstEndHost, node)));
+        }
     }
 
     public void append(ArrayList<Link> param_route) {
@@ -231,5 +235,18 @@ class Node {
 
     public void addNeighbor(short port, Link link) {
         neighbors.put(port, link);
+    }
+
+    @Override
+    public String toString() {
+        String retval;
+        retval = name + " ->\n";
+        for (Map.Entry<Short, Link> entry : getNeighbors().entrySet()) {
+            retval += "(" + entry.getKey() + "," +
+                    entry.getValue().getPair().getSrcNode().getName() + "-" +
+                    entry.getValue().getPair().getDstEndHost().getName() + ")";
+        }
+        retval += "\n";
+        return retval;
     }
 }
