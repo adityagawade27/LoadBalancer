@@ -103,8 +103,9 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	private final static byte[] LOAD_BALANCER_MAC = Ethernet
 			.toMACAddress("00:00:00:00:00:FE");
 
-	private Map<Integer, Long> trafficStats;
-	private Map<Short, RoundRobinServers> portNumberServersMap;
+	private Map<Short, ArrayList<Server>> portNumberServersMap;
+	private Map<Short, TreeMap<Integer, Integer>> portServerPacketCountMap;
+	private int lastServer = 0;
 
 	/**
 	 * @param floodlightProvider
@@ -144,11 +145,13 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		if (destIPAddress == LOAD_BALANCER_IP) {
 
 			server = getDestServer(sw, pi);
-			processRuleAndPushPacket(server, sw, pi,true);
+			server = getNextHop(server,sw,pi);
+			processRuleAndPushPacket(server, sw, pi, true);
+
 		} else {
 
-			// server = getLeastLoadedPath(server, sw, pi); // TODO
-			processRuleAndPushPacket(server, sw, pi,false);
+			server = getNextHop(server, sw, pi); // TODO
+			processRuleAndPushPacket(server, sw, pi, false);
 
 		}
 
@@ -160,14 +163,30 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 
-		Server server = portNumberServersMap.get(
-				match.getTransportDestination()).getNextServer();
-		return server;
+		Short appPort = match.getTransportDestination();
+
+		// If no stats available use Round Robin
+		if (portServerPacketCountMap.isEmpty()) {
+
+			List<Server> servers = portNumberServersMap.get(appPort);
+			lastServer = (lastServer + 1) % servers.size();
+			return servers.get(lastServer);
+
+		} else { // Get least loaded server
+
+			Integer destIP = portServerPacketCountMap.get(appPort).firstEntry()
+					.getKey();
+			Server server = new Server();
+			server.setIP(IPv4.fromIPv4Address(destIP));
+
+			return server;
+
+		}
 
 	}
 
-	private void processRuleAndPushPacket(Server forwardServer,
-			IOFSwitch sw, OFPacketIn pi, Boolean rewrite) {
+	private void processRuleAndPushPacket(Server forwardServer, IOFSwitch sw,
+			OFPacketIn pi, Boolean rewrite) {
 
 		OFFlowMod rule = new OFFlowMod();
 		rule.setType(OFType.FLOW_MOD);
@@ -185,6 +204,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 		short actionsLength = 0;
 		ArrayList<OFAction> actions = null;
+
 		if (rewrite) {
 
 			actions = new ArrayList<OFAction>();
@@ -203,8 +223,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 			rule.setActions(actions);
 
 			actionsLength = (short) (OFActionDataLayerDestination.MINIMUM_LENGTH
-					+ OFActionNetworkLayerDestination.MINIMUM_LENGTH 
-					+ OFActionOutput.MINIMUM_LENGTH);
+					+ OFActionNetworkLayerDestination.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH);
 		}
 
 		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
@@ -278,22 +297,16 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		Long destMac = Ethernet.toLong(flowRemovedMessage.getMatch()
 				.getDataLayerDestination());
 
+		Integer destIP = flowRemovedMessage.getMatch().getNetworkDestination();
+		Short appPort = flowRemovedMessage.getMatch().getTransportDestination();
+
 		// Collect Statistics for each flow that was removed
-		trafficStats.clear();
-		List<Server> serverList = new ArrayList<Server>();
-		for (Map.Entry<Short, RoundRobinServers> entry : portNumberServersMap
-				.entrySet()) {
-			serverList.addAll(entry.getValue().getServers());
+		portServerPacketCountMap.clear();
+		if (isNextHop(sw, destIP)) {
 
-		}
-		for (Server server : serverList) {
-
-			if (flowRemovedMessage.getMatch().getNetworkDestination() == server
-					.getIP()) {
-
-				Long count = trafficStats.get(server.getIP()) + 1;
-				trafficStats.put(server.getIP(), count);
-			}
+			Integer count = (int) (portServerPacketCountMap.get(appPort).get(
+					destIP) + flowRemovedMessage.getPacketCount());
+			portServerPacketCountMap.get(appPort).put(destIP, count);
 
 		}
 
@@ -376,18 +389,17 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 		floodlightProvider = context
 				.getServiceImpl(IFloodlightProviderService.class);
-		trafficStats = new TreeMap<Integer, Long>();
-		portNumberServersMap = new HashMap<Short, RoundRobinServers>();
-
-		initializeServers();
+		portServerPacketCountMap = new HashMap<Short, TreeMap<Integer, Integer>>();
+		portNumberServersMap = new HashMap<Short, ArrayList<Server>>();
+		initializeAppServers();
 
 	}
 
-	private void initializeServers() {
+	private void initializeAppServers() {
 
 		// Hardcoding Server Addresses for now
 
-		List<Server> servers = new ArrayList<Server>();
+		ArrayList<Server> servers = new ArrayList<Server>();
 
 		Server h3 = new Server();
 		h3.setIP("10.0.0.3");
@@ -406,10 +418,8 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		servers.add(h5);
 		servers.add(h6);
 
-		RoundRobinServers rrservers = new RoundRobinServers();
-		rrservers.addServers(servers);
+		portNumberServersMap.put((short) 8080, servers);
 
-		portNumberServersMap.put((short) 8080, rrservers);
 	}
 
 	@Override
