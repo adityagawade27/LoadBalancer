@@ -229,20 +229,21 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		//String destMACAddress = new String(match.getDataLayerDestination());
 
 		System.out.println("MYD: " + sw.getStringId());
-		Node currentSwitch = topology.getTopology().get(sw.getStringId());
+	
 		Server destServer = null;
 	
 		if (curDestIPAddress == LOAD_BALANCER_IP) {
 			
 			destServer = getDestServer(sw, pi);
 			String destIP = destServer.getIP();	
+			System.out.println("MYD: S = " + sw.getId());
 
-			short outPort = topology.getNextHop(destIP,currentSwitch);
+			short outPort = topology.getNextHop(destIP,"s"+sw.getId());
 			destServer.setPort(outPort);
 	
 		} else {
 
-			short outPort = topology.getNextHop(curDestIPString ,currentSwitch);
+			short outPort = topology.getNextHop(curDestIPString, "s"+ sw.getId());
 			destServer = new Server();
 			destServer.setPort(outPort);
 			destServer.setIP(curDestIPString);
