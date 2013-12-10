@@ -49,7 +49,7 @@ public class Topology implements ITopology {
     private void initialize() {
         readFromFile();
         preprocessLinks();
-        calculateRoutes();
+        //calculateRoutes();
     }
 
     private void calculateRoutes() {
