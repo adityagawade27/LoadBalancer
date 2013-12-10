@@ -195,6 +195,32 @@ class NodeNodePair {
     public String toString() {
         return "(" + srcNode.getName() + "->" + dstEndHost.getName() + ")";
     }
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result
+				+ ((dstEndHost == null) ? 0 : dstEndHost.getName().hashCode());
+		result = prime * result + ((srcNode == null) ? 0 : srcNode.getName().hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		NodeNodePair other = (NodeNodePair) obj;
+		if (dstEndHost == null) {
+			if (other.dstEndHost != null)
+				return false;
+		} else if (!dstEndHost.getName().equals(other.dstEndHost.getName()))
+			return false;
+		if (srcNode == null) {
+			if (other.srcNode != null)
+				return false;
+		} else if (!srcNode.getName().equals(other.srcNode.getName()))
+			return false;
+		return true;
+	}
 }
 
 class Node {
@@ -215,8 +241,6 @@ class Node {
     Map<Short, Link> neighbors;
 
     String name;
-
-    private String IPAddress;
 
     Node() {
         ports = new HashMap<>();
