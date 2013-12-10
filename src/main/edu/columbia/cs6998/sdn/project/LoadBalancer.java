@@ -99,13 +99,12 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	// Load Balancer Component
 	private final static int LOAD_BALANCER_IP = IPv4
-			.toIPv4Address("10.0.0.254");
+			.toIPv4Address("10.0.0.100");
 	private final static byte[] LOAD_BALANCER_MAC = Ethernet
 			.toMACAddress("00:00:00:00:00:FE");
 
 	private Map<Server, Long> trafficStats;
 	private Map<Short, RoundRobinServers> portNumberServersMap;
-	
 
 	/**
 	 * @param floodlightProvider
@@ -120,7 +119,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	public String getName() {
 		return "LoadBalancer";
 	}
-	
+
 	/**
 	 * Processes a OFPacketIn message. If the switch has learned the MAC to port
 	 * mapping for the pair it will write a FlowMod for. If the mapping has not
@@ -139,16 +138,17 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 		Integer destIPAddress = match.getNetworkDestination();
 
+		Server server = new Server();
+		server.setIP(IPv4.fromIPv4Address(destIPAddress));
+
 		if (destIPAddress == LOAD_BALANCER_IP) {
 
-			Server server = getDestServer(sw, pi);
-			Server reverseServer = new Server(LOAD_BALANCER_IP,
-					LOAD_BALANCER_MAC);
-			processRuleAndPushPacket(server, reverseServer, sw, pi);
+			server = getDestServer(sw, pi);
+			processRuleAndPushPacket(server, sw, pi);
 		} else {
 
-			Server server = getLeastLoadedPath(sw, pi); // Niket TODO
-			processRuleAndPushPacket(server, null, sw, pi);
+			server = getLeastLoadedPath(server, sw, pi); // TODO
+			processRuleAndPushPacket(server, sw, pi);
 
 		}
 
@@ -166,9 +166,9 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	}
 
-	private void processRuleAndPushPacket(Server forwardServer,
-			Server reverseServer, IOFSwitch sw, OFPacketIn pi) {
-	
+	private void processRuleAndPushPacket(Server forwardServer, IOFSwitch sw,
+			OFPacketIn pi) {
+
 		OFFlowMod rule = new OFFlowMod();
 		rule.setType(OFType.FLOW_MOD);
 		rule.setCommand(OFFlowMod.OFPFC_ADD);
@@ -190,7 +190,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
-		
+
 		// Add action to re-write destination MAC to the MAC of the chosen
 		// server
 		OFAction rewriteMAC = new OFActionDataLayerDestination(forwardServer
@@ -223,86 +223,6 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 			sw.write(rule, null);
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
-
-		// Create a flow table modification message to add a rule for the
-		// reverse direction
-		if (reverseServer != null) {
-
-			OFFlowMod reverseRule = new OFFlowMod();
-			reverseRule.setType(OFType.FLOW_MOD);
-			reverseRule.setCommand(OFFlowMod.OFPFC_ADD);
-
-			// Create match based on packet
-			OFMatch reverseMatch = new OFMatch();
-			reverseMatch.loadFromPacket(pi.getPacketData(), pi.getInPort());
-
-			// Flip source Ethernet addresses to server
-			reverseMatch.setDataLayerSource(forwardServer.getMAC());
-
-			// Set destination Ethernet address to client
-			reverseMatch.setDataLayerDestination(match.getDataLayerSource());
-
-			// Set source IP address to server
-			reverseMatch.setNetworkSource((int) forwardServer.getIP());
-
-			// Set destination IP address to client
-			reverseMatch.setNetworkDestination(match.getNetworkSource());
-
-			// Flip source/destination TCP ports
-			reverseMatch.setTransportSource(match.getTransportDestination());
-			reverseMatch.setTransportDestination(match.getTransportSource());
-
-			// Set in port to server port
-			reverseMatch.setInputPort(forwardServer.getPort());
-
-			// Match exact flow -- i.e., no wildcards
-			reverseMatch.setWildcards(~OFMatch.OFPFW_ALL);
-			reverseRule.setMatch(reverseMatch);
-
-			// Specify the timeouts for the rule
-			reverseRule.setIdleTimeout(IDLE_TIMEOUT_DEFAULT);
-			reverseRule.setHardTimeout(HARD_TIMEOUT_DEFAULT);
-
-			// Set the buffer id to NONE -- implementation artifact
-			reverseRule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-
-			// Initialize list of actions
-			ArrayList<OFAction> reverseActions = new ArrayList<OFAction>();
-
-			// Add action to re-write destination MAC to the MAC of the chosen
-			// server
-			OFAction reverseRewriteMAC = new OFActionDataLayerSource(
-					reverseServer.getMAC().getBytes());
-			reverseActions.add(reverseRewriteMAC);
-
-			// Add action to re-write destination IP to the IP of the chosen
-			// server
-			OFAction reverseRewriteIP = new OFActionNetworkLayerSource(
-					(int) reverseServer.getIP());
-			reverseActions.add(reverseRewriteIP);
-
-			// Add action to output packet
-			OFAction reverseOutputTo = new OFActionOutput(pi.getInPort());
-			reverseActions.add(reverseOutputTo);
-
-			// Add actions to rule
-			reverseRule.setActions(reverseActions);
-
-			// Specify the length of the rule structure
-			reverseRule
-					.setLength((short) (OFFlowMod.MINIMUM_LENGTH
-							+ OFActionDataLayerSource.MINIMUM_LENGTH
-							+ OFActionNetworkLayerSource.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH));
-
-			log.debug("Install rule for reverse direction for flow: "
-					+ reverseRule);
-
-			try {
-				sw.write(reverseRule, null);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
 		}
 
 		pushPacket(sw, pi, actions, actionsLength);
@@ -356,7 +276,8 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	 * @return Whether to continue processing this message or stop.
 	 * @throws IOException
 	 * @throws ExecutionException
-	 * @throws InterruptedExceptionOFMatch match = flowRemovedMessage.getMatch();
+	 * @throws InterruptedExceptionOFMatch
+	 *             match = flowRemovedMessage.getMatch();
 	 */
 	private Command processFlowRemovedMessage(IOFSwitch sw,
 			OFFlowRemoved flowRemovedMessage) throws IOException,
@@ -368,12 +289,16 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 				.getDataLayerDestination());
 
 		// Update traffic stats for each switch
-		Map<Server,OFFlowStatisticsReply> statList = getSwitchStatistics(sw);
-		trafficStats.clear();
-		for (Map.Entry<Server, OFFlowStatisticsReply> statEntry : statList.entrySet()) {
-			
-				trafficStats.put(statEntry.getKey(), statEntry.getValue().getPacketCount());
-			
+		
+		Map<Server, OFFlowStatisticsReply> statList = getSwitchStatistics(sw);
+	
+		
+		for (Map.Entry<Server, OFFlowStatisticsReply> statEntry : statList
+				.entrySet()) {
+
+			trafficStats.put(statEntry.getKey(), statEntry.getValue()
+					.getPacketCount());
+
 		}
 
 		if (log.isTraceEnabled()) {
@@ -389,8 +314,6 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 				"{} flow entry removed {} used Bytes:"
 						+ flowRemovedMessage.getByteCount(), sw,
 				HexString.toHexString(destMac));
-
-		
 
 		return Command.CONTINUE;
 	}
@@ -408,7 +331,6 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		request.setStatisticType(OFStatisticsType.AGGREGATE);
 
 		OFAggregateStatisticsRequest specificReq = new OFAggregateStatisticsRequest();
-		portNumberServersMap.values();
 
 		List<Server> servers = new ArrayList<Server>();
 		for (Entry<Short, RoundRobinServers> portServersEntry : portNumberServersMap
@@ -489,7 +411,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
 		return l;
 	}
-	
+
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
 		Map<Class<? extends IFloodlightService>, IFloodlightService> m = new HashMap<Class<? extends IFloodlightService>, IFloodlightService>();
@@ -512,6 +434,13 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		trafficStats = new TreeMap<Server, Long>();
 		portNumberServersMap = new HashMap<Short, RoundRobinServers>();
 
+	}
+
+	private void setUpPortNumServers(){
+		
+		 Server server = new Server()
+		
+		
 	}
 
 	@Override

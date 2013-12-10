@@ -14,6 +14,10 @@ public class Server {
 		macAddress = new String(loadBalancerMac);
 	}
 
+	public Server() {
+		// TODO Auto-generated constructor stub
+	}
+
 	public long getIP() {
 		return Ethernet.toLong(ipAddress.getBytes());
 	}
