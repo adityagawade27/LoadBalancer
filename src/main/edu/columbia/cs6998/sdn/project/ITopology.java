@@ -193,7 +193,11 @@ class NodeNodePair {
 
     @Override
     public String toString() {
-        return "(" + srcNode.getName() + "->" + dstEndHost.getName() + ")";
+        String retVal = "(";
+        if (srcNode != null)
+            retVal += srcNode.getName();
+        retVal += "->" + dstEndHost.getName() + ")";
+        return retVal;
     }
 
 	@Override
