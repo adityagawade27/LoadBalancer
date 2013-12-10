@@ -9,7 +9,7 @@ import java.util.Map;
  * Created by Niket Kandya on 12/10/13.
  */
 public interface ITopology {
-    short getNextHop(String ipAddress, String macAddress);
+    short getNextHop(String ipAddress, String name);
 }
 
 class RouteRREntity {
@@ -202,9 +202,6 @@ class Node {
     
     String ipAddress;
 
-    //Mac address of the host
-    String macAddress;
-
     //Check if the node is an end hostflowMod
     Boolean isHost;
 
@@ -212,7 +209,7 @@ class Node {
     Boolean isBorderSwitch;
 
     //List of ports this node has
-    List<Short> ports;
+    Map<Short, String> ports;
 
     //Map of port to neighboring nodes
     Map<Short, Link> neighbors;
@@ -222,7 +219,7 @@ class Node {
     private String IPAddress;
 
     Node() {
-        ports = new ArrayList<>();
+        ports = new HashMap<>();
         neighbors = new HashMap<>();
     }
 
@@ -234,10 +231,6 @@ class Node {
         return ipAddress;
     }
 
-    public String getMacAddress() {
-        return macAddress;
-    }
-
     public Boolean getIsHost() {
         return isHost;
     }
@@ -246,7 +239,7 @@ class Node {
         return isBorderSwitch;
     }
 
-    public List<Short> getPorts() {
+    public Map<Short, String> getPorts() {
         return ports;
     }
 
@@ -258,12 +251,8 @@ class Node {
         this.name = name;
     }
 
-    public void setMacAddress(String macAddress) {
-        this.macAddress = macAddress;
-    }
-
-    public void addPort(short i) {
-        ports.add(i);
+    public void addPort(short i, String macAddress) {
+        ports.put(i, macAddress);
     }
 
     public void setIpAddress(String ipAddress) {

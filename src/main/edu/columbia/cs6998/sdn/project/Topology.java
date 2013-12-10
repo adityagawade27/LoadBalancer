@@ -97,14 +97,14 @@ public class Topology implements ITopology {
                     node1 = addNewNode(split[0], split[1], split[2], split[3]);
                 else {
                     node1 = topology.get(split[0]);
-                    node1.addPort(Short.parseShort(split[1]));
+                    node1.addPort(Short.parseShort(split[1]), split[2]);
                 }
 
                 if (!topology.containsKey(split[4]))
                     node2 = addNewNode(split[4], split[5], split[6], split[7]);
                 else {
                     node2 = topology.get(split[4]);
-                    node2.addPort(Short.parseShort(split[5]));
+                    node2.addPort(Short.parseShort(split[5]), split[6]);
                 }
 
                 Link link1 = new Link(new NodeNodePair(node1, node2),
@@ -123,21 +123,21 @@ public class Topology implements ITopology {
     private Node addNewNode(String s, String s1, String s2, String s3) {
         Node node = new Node();
         node.setName(s);
-        node.setMacAddress(s2);
         node.setIpAddress(s3);
         if (node.getIpAddress().equals("127.0.0.1"))
             node.setIsHost(false);
         else
             node.setIsHost(true);
-        node.addPort(Short.parseShort(s1));
+        node.addPort(Short.parseShort(s1), s2);
         topology.put(node.getName(), node);
         ipToNodeMap.put(node.getIpAddress(),node.getName());
-        macToNodeMap.put(node.getMacAddress(),node.getName());
         return node;
     }
 
     public String getMacAddressFromIP(String ipAddress) {
-        return getTopology().get(ipToNodeMap.get(ipAddress)).getMacAddress();
+        Node node = getTopology().get(ipToNodeMap.get(ipAddress));
+        ArrayList<String> macAddresses = new ArrayList<>(node.getPorts().values());
+        return macAddresses.get(0);
     }
 
     //Ideally this should be calculated from the route
@@ -203,8 +203,8 @@ public class Topology implements ITopology {
     }
 
     @Override
-    public short getNextHop(String dstIP, String macAddress) {
-        Node srcNode = topology.get(macToNodeMap.get(macAddress));
+    public short getNextHop(String dstIP, String name) {
+        Node srcNode = topology.get(name);
         NodeNodePair pair = new NodeNodePair(srcNode, topology.get(ipToNodeMap.get(dstIP)));
         RouteRREntity routeRREntity = routes.get(pair);
         List<FinalRoute> finalRoutes = routeRREntity.getRoutes();
