@@ -204,7 +204,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		Integer destIPAddress = match.getNetworkDestination();
 		String destMACAddress = new String(match.getDataLayerDestination());
 
-		//Server server = new Server(IPv4.fromIPv4Address(destIPAddress), destMACAddress,(short)0);
+		Server server = new Server(IPv4.fromIPv4Address(destIPAddress), destMACAddress,(short)0);
 
 		if (destIPAddress == LOAD_BALANCER_IP) {
 
@@ -212,14 +212,14 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			//logger.info("Destination MAC Address " + server.getMAC());
 			//logger.info("Destination IP Address " + server.getIP());
 			
-			//server = getDestServer(sw, pi);
+			server = getDestServer(sw, pi);
 			//server = getNextHop(server, sw, pi);
-			//processRuleAndPushPacket(server, sw, pi, true);
+			processRuleAndPushPacket(server, sw, pi);
 
 		} else {
 
 			//server = getNextHop(server, sw, pi); // TODO
-			//processRuleAndPushPacket(server, sw, pi, false);
+			processRuleAndPushPacket(server, sw, pi);
 
 		}
 
@@ -292,8 +292,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	}
 
 
-
-	private void loadBalanceFlow(Server server,IOFSwitch sw, OFPacketIn pi) {
+	private void processRuleAndPushPacket(Server server,IOFSwitch sw, OFPacketIn pi) {
 		// TODO Implemented round-robin load balancing
 		
 		
