@@ -334,13 +334,13 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		List<Server> servers = new ArrayList<Server>();
 		for (Entry<Short, RoundRobinServers> portServersEntry : portNumberServersMap
 				.entrySet()) {
-
 			servers.addAll((Collection<? extends Server>) portServersEntry
 					.getValue());
 
 		}
 
 		for (Server server : servers) {
+			
 			specificReq.setMatch(new OFMatch()
 					.setNetworkDestination((int) server.getIP()));
 			request.setStatistics(Collections
@@ -439,7 +439,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	private void initializeServers() {
 
-		// Hardcoing Server Addresses for now
+		// Hardcoding Server Addresses for now
 
 		List<Server> servers = new ArrayList<Server>();
 
