@@ -27,8 +27,8 @@ public class Topology implements ITopology {
     }
 
     private Topology() {
-        topology = new HashMap<String, Node>();
-        ipToNodeMap = new HashMap<String, Short>();
+        topology = new HashMap<>();
+        ipToNodeMap = new HashMap<>();
         initialize();
     }
 
@@ -45,8 +45,12 @@ public class Topology implements ITopology {
     }
 
     private void preprocessLinks() {
-        for (String name : topology.keySet()) {
-
+        for (Node value : topology.values()) {
+            if (!value.getIsHost()) {
+                switches.add(value);
+            } else {
+                endHosts.add(value);
+            }
         }
     }
 
