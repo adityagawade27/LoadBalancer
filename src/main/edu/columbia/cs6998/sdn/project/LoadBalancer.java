@@ -147,7 +147,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 			processRuleAndPushPacket(server, sw, pi);
 		} else {
 
-			server = getLeastLoadedPath(server, sw, pi); // TODO
+			// server = getLeastLoadedPath(server, sw, pi); // TODO
 			processRuleAndPushPacket(server, sw, pi);
 
 		}
@@ -289,10 +289,9 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 				.getDataLayerDestination());
 
 		// Update traffic stats for each switch
-		
+
 		Map<Server, OFFlowStatisticsReply> statList = getSwitchStatistics(sw);
-	
-		
+
 		for (Map.Entry<Server, OFFlowStatisticsReply> statEntry : statList
 				.entrySet()) {
 
@@ -434,13 +433,37 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		trafficStats = new TreeMap<Server, Long>();
 		portNumberServersMap = new HashMap<Short, RoundRobinServers>();
 
+		initializeServers();
+
 	}
 
-	private void setUpPortNumServers(){
-		
-		 Server server = new Server()
-		
-		
+	private void initializeServers() {
+
+		// Hardcoing Server Addresses for now
+
+		List<Server> servers = new ArrayList<Server>();
+
+		Server h3 = new Server();
+		h3.setIP("10.0.0.3");
+
+		Server h4 = new Server();
+		h4.setIP("10.0.0.4");
+
+		Server h5 = new Server();
+		h5.setIP("10.0.0.5");
+
+		Server h6 = new Server();
+		h6.setIP("10.0.0.6");
+
+		servers.add(h3);
+		servers.add(h4);
+		servers.add(h5);
+		servers.add(h6);
+
+		RoundRobinServers rrservers = new RoundRobinServers();
+		rrservers.addServers(servers);
+
+		portNumberServersMap.put((short) 8080, rrservers);
 	}
 
 	@Override
