@@ -345,7 +345,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		}	
 
 		
-		pushPacket(sw, pi, actions, actionsLength);destIP
+		pushPacket(sw, pi, actions, actionsLength);
 	}
 	
 	/**
