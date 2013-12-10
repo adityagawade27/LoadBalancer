@@ -47,10 +47,9 @@ public class Topology implements ITopology {
 
     
     private void initialize() {
-        //Read the topology from the file here
         readFromFile();
         preprocessLinks();
-        //calculateRoutes();
+        calculateRoutes();
     }
 
     private void calculateRoutes() {
