@@ -136,8 +136,15 @@ public class Topology implements ITopology {
     }
 
     public String getMacAddressFromIP(String ipAddress) {
-    	public HashMap<String, Node> hm = getTopology();
-        return hm.get(ipToNodeMap.get(ipAddress)).getMacAddress();
+    	HashMap<String, Node> hm = getTopology();
+    	
+    	    String map = ipToNodeMap.get(ipAddress);
+    	    System.out.println(ipAddress);
+    	    if(map == null)
+        		System.out.println("Eyadsafs");
+    	Node ip = hm.get(map);
+    	
+        return ip.getMacAddress();
     }
 
     //Ideally this should be calculated from the route
