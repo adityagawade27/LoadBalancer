@@ -1,6 +1,5 @@
 package main.edu.columbia.cs6998.sdn.project;
 
-import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
 
 public class Server {
@@ -14,8 +13,12 @@ public class Server {
 		macAddress = new String(loadBalancerMac);
 	}
 
-	public long getIP() {
-		return Ethernet.toLong(ipAddress.getBytes());
+	public Server() {
+		// TODO Auto-generated constructor stub
+	}
+
+	public int getIP() {
+		return IPv4.toIPv4Address(ipAddress.getBytes());
 	}
 
 	public void setIP(String ipAddress) {
