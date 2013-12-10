@@ -1,5 +1,8 @@
 package main.edu.columbia.cs6998.sdn.project;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.*;
 
 /**
@@ -8,7 +11,7 @@ import java.util.*;
 
 public class Topology implements ITopology {
 
-    private HashMap<Short, Node> topology;
+    private HashMap<String, Node> topology;
     private HashMap<String, Short> ipToNodeMap;
     private ArrayList<Node> endHosts;
     private ArrayList<Node> switches;
@@ -24,13 +27,15 @@ public class Topology implements ITopology {
     }
 
     private Topology() {
-        topology = new HashMap<Short, Node>();
+        topology = new HashMap<String, Node>();
         ipToNodeMap = new HashMap<String, Short>();
         initialize();
     }
 
     private void initialize() {
         //Read the topology from the file here
+        readFromFile();
+        preprocessLinks();
         for (Node swtch : switches) {
             for (Node host : endHosts) {
                 List<FinalRoute> localRoutes = getRoutes(swtch, host);
@@ -39,10 +44,69 @@ public class Topology implements ITopology {
         }
     }
 
+    private void preprocessLinks() {
+        for (String name : topology.keySet()) {
+
+        }
+    }
+
+    private void readFromFile() {
+        InputStream in = getClass().getResourceAsStream("sample.output");
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            String line = null;
+            Node node1, node2;
+            while ((line = reader.readLine()) != null) {
+                String[] split = line.split(",");
+                if (!topology.containsKey(split[0]))
+                    node1 = addNewNode(split[0], split[1], split[2], split[3]);
+                else {
+                    node1 = topology.get(split[0]);
+                    node1.addPort(Short.parseShort(split[1]));
+                }
+
+                if (!topology.containsKey(split[4]))
+                    node2 = addNewNode(split[4], split[5], split[6], split[7]);
+                else {
+                    node2 = topology.get(split[4]);
+                    node2.addPort(Short.parseShort(split[5]));
+                }
+
+                Link link1 = new Link(new NodeNodePair(node1, node2),
+                        Short.parseShort(split[1]), Short.parseShort(split[5]));
+                Link link2 = new Link(new NodeNodePair(node2, node1),
+                        Short.parseShort(split[5]), Short.parseShort(split[1]));
+
+                node1.addNeighbor(link1.getSrcPort(), link1);
+                node2.addNeighbor(link2.getSrcPort(), link2);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Node addNewNode(String s, String s1, String s2, String s3) {
+        Node node = new Node();
+        node.setName(s);
+        node.setMacAddress(s2);
+        node.setIpAddress(s3);
+        if (node.getIpAddress().equals("127.0.0.1"))
+            node.setIsHost(false);
+        else
+            node.setIsHost(true);
+        node.addPort(Short.parseShort(s1));
+        topology.put(node.getName(), node);
+        return node;
+    }
+
+    public static void main(String args[]) {
+        Topology.getInstance();
+    }
+
     private List<FinalRoute> getRoutes(Node swtch, Node host) {
         List<FinalRoute> retVal = new ArrayList<>();
         Deque<FinalRoute> queue = new ArrayDeque<>();
-        Short last;
+        String last;
         FinalRoute tempRoute = new FinalRoute();
         FinalRoute newRoute;
         tempRoute.append(swtch);
@@ -50,12 +114,12 @@ public class Topology implements ITopology {
 
         while (!queue.isEmpty()) {
             tempRoute = queue.remove();
-            last = tempRoute.getLastId();
-            if (last == host.getId()) {
+            last = tempRoute.getLastName();
+            if (last == host.getName()) {
                 retVal.add(new FinalRoute(tempRoute));
             }
             for (Link link : host.getNeighbors().values()) {
-                Short id = link.getPair().getDstEndHost().getId();
+                String id = link.getPair().getDstEndHost().getName();
                 if (!tempRoute.getRoute().contains(id)) {
                     newRoute = new FinalRoute();
                     newRoute.append(tempRoute.getRoute());
@@ -73,9 +137,9 @@ public class Topology implements ITopology {
         RouteRREntity routeRREntity = routes.get(pair);
         List<FinalRoute> finalRoutes = routeRREntity.getRoutes();
         if (finalRoutes.size() == 1) {
-            return finalRoutes.get(0).getFirstId();
+            return finalRoutes.get(0).getFirstHop();
         } else {
-            return selectNext(routeRREntity, srcNode).getFirstId();
+            return selectNext(routeRREntity, srcNode).getFirstHop();
         }
     }
 
@@ -86,7 +150,7 @@ public class Topology implements ITopology {
         //Search for available legal path
         do {
             finalRoute = rrEntity.getRoutes().get(currentInstance);
-            if (finalRoute.getFirstId() != srcNode.getId())
+            if (finalRoute.getFirstHopName() != srcNode.getName())
                 break;
             rrEntity.incrementInstance();
             finalRoute = null;

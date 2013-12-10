@@ -3,6 +3,7 @@ package main.edu.columbia.cs6998.sdn.project;
 import com.sun.istack.internal.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,18 +57,25 @@ class FinalRoute {
         return cost;
     }
 
-    Short getFirstId() {
+    short getFirstHop() {
         if (!route.isEmpty())
-            return route.get(0).getPair().getDstEndHost().getId();
+            return route.get(0).getDstPort();
         else
             return -1; //This should never happen.
     }
 
-    Short getLastId() {
+    String getFirstHopName() {
         if (!route.isEmpty())
-            return route.get(route.size() - 1).getPair().getDstEndHost().getId();
+            return route.get(0).getPair().getDstEndHost().getName();
         else
-            return -1; //This should never happen.
+            return null; //This should never happen.
+    }
+
+    String getLastName() {
+        if (!route.isEmpty())
+            return route.get(route.size() - 1).getPair().getDstEndHost().getName();
+        else
+            return null; //This should never happen.
     }
 
     void append(Node node) {
@@ -82,15 +90,39 @@ class FinalRoute {
 
 class Link {
     private NodeNodePair pair;
+    private short srcPort;
+    private short dstPort;
     private Double cost;
 
-    Link(NodeNodePair pair) {
-        this(pair, 0.0);
+    public Link(NodeNodePair nodeNodePair, Double cost, short srcPort, short dstPort) {
+        pair = nodeNodePair;
+        this.cost = cost;
+        this.srcPort = srcPort;
+        this.dstPort = dstPort;
     }
 
-    Link(NodeNodePair pair, Double cost) {
-        this.pair = pair;
-        this.cost = cost;
+    public Link(NodeNodePair nodeNodePair, short srcPort, short dstPort) {
+        this(nodeNodePair, 0.0, srcPort, dstPort);
+    }
+
+    public short getSrcPort() {
+        return srcPort;
+    }
+
+    public void setSrcPort(short srcPort) {
+        this.srcPort = srcPort;
+    }
+
+    public short getDstPort() {
+        return dstPort;
+    }
+
+    public void setDstPort(short dstPort) {
+        this.dstPort = dstPort;
+    }
+
+    Link(NodeNodePair pair) {
+        this(pair, 0.0, (short) 0, (short) 0);
     }
 
     public NodeNodePair getPair() {
@@ -140,8 +172,18 @@ class Node {
     //Map of port to neighboring nodes
     Map<Short, Link> neighbors;
 
-    //Unique id for this node
-    Short id;
+    String name;
+
+    private String IPAddress;
+
+    Node() {
+        ports = new ArrayList<>();
+        neighbors = new HashMap<>();
+    }
+
+    public String getName() {
+        return name;
+    }
 
     public String getIpAddress() {
         return ipAddress;
@@ -167,7 +209,27 @@ class Node {
         return neighbors;
     }
 
-    public Short getId() {
-        return id;
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setMacAddress(String macAddress) {
+        this.macAddress = macAddress;
+    }
+
+    public void addPort(short i) {
+        ports.add(i);
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public void setIsHost(Boolean isHost) {
+        this.isHost = isHost;
+    }
+
+    public void addNeighbor(short port, Link link) {
+        neighbors.put(port, link);
     }
 }
