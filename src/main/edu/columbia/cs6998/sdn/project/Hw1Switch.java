@@ -461,27 +461,19 @@ public class Hw1Switch implements IFloodlightModule, IOFMessageListener {
 			return Command.CONTINUE;
 		}
 
+		
 		Long sourceMac = Ethernet.toLong(flowRemovedMessage.getMatch()
 				.getDataLayerSource());
 		Long destMac = Ethernet.toLong(flowRemovedMessage.getMatch()
 				.getDataLayerDestination());
 
+		
+		
 		if (log.isTraceEnabled()) {
-		//	log.trace("{} flow entry removed {}", sw,
+			//	log.trace("{} flow entry removed {}", sw,
 			//		HexString.toHexString(sourceMac));
 		}
-
-		List<OFFlowStatisticsReply> statList = getSwitchStatistics(sw);
-		for(OFFlowStatisticsReply reply : statList)
-		{
-			System.out.println("*************************************************");
-			System.out.println("Server" + reply.getMatch().getNetworkDestination()) ;
-			System.out.println("Packet Count "  + reply.getPacketCount());
-			System.out.println("-------------------------------------------------");
-			
-			
-		}
-
+		
 		Map<IOFSwitch, Long> switchToLengthMap = totalDataLengths
 				.get(sourceMac);
 		if (switchToLengthMap == null) {
@@ -520,43 +512,7 @@ public class Hw1Switch implements IFloodlightModule, IOFMessageListener {
 		return Command.CONTINUE;
 	}
 
-	protected List<OFFlowStatisticsReply> getSwitchStatistics(IOFSwitch sw) {
-
-		List<OFFlowStatisticsReply> statsReply = new ArrayList<OFFlowStatisticsReply>();
-		List<OFStatistics> values = null;
-		Future<List<OFStatistics>> future;
-
-		// Statistics request object for getting flows
-		OFStatisticsRequest request = new OFStatisticsRequest();
-		request.setStatisticType(OFStatisticsType.AGGREGATE);
-
-		OFAggregateStatisticsRequest specificReq = new OFAggregateStatisticsRequest();
-
-		specificReq.setMatch(new OFMatch().setNetworkDestination(IPv4
-				.toIPv4Address("10.0.0.1")));
-		request.setStatistics(Collections
-				.singletonList((OFStatistics) specificReq));
-
-		int requestLength = request.getLengthU();
-		requestLength += specificReq.getLength();
-		request.setLengthU(requestLength);
-
-		try {
-			// System.out.println(sw.getStatistics(req));
-			future = sw.getStatistics(request);
-			values = future.get(10, TimeUnit.SECONDS);
-			if (values != null) {
-				for (OFStatistics stat : values) {
-					statsReply.add((OFFlowStatisticsReply) stat);
-				}
-			}
-		} catch (Exception e) {
-			log.error("Failure retrieving statistics from switch " + sw, e);
-		}
-
-		return statsReply;
-	}
-
+	
 	// IOFMessageListener
 
 	@Override

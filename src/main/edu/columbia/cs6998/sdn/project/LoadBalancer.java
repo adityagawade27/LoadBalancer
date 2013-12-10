@@ -103,7 +103,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	private final static byte[] LOAD_BALANCER_MAC = Ethernet
 			.toMACAddress("00:00:00:00:00:FE");
 
-	private Map<Server, Long> trafficStats;
+	private Map<Integer, Long> trafficStats;
 	private Map<Short, RoundRobinServers> portNumberServersMap;
 
 	/**
@@ -144,11 +144,11 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		if (destIPAddress == LOAD_BALANCER_IP) {
 
 			server = getDestServer(sw, pi);
-			processRuleAndPushPacket(server, sw, pi);
+			processRuleAndPushPacket(server, sw, pi,true);
 		} else {
 
 			// server = getLeastLoadedPath(server, sw, pi); // TODO
-			processRuleAndPushPacket(server, sw, pi);
+			processRuleAndPushPacket(server, sw, pi,false);
 
 		}
 
@@ -166,58 +166,48 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 	}
 
-	private void processRuleAndPushPacket(Server forwardServer, IOFSwitch sw,
-			OFPacketIn pi) {
+	private void processRuleAndPushPacket(Server forwardServer,
+			IOFSwitch sw, OFPacketIn pi, Boolean rewrite) {
 
 		OFFlowMod rule = new OFFlowMod();
 		rule.setType(OFType.FLOW_MOD);
 		rule.setCommand(OFFlowMod.OFPFC_ADD);
 
-		// Create match based on packet
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
-
-		// Match exact flow -- i.e., no wildcards
 		match.setWildcards(~OFMatch.OFPFW_ALL);
-		rule.setMatch(match);
+		match.setNetworkDestination(forwardServer.getIP());
 
-		// Specify the timeouts for the rule
+		rule.setMatch(match);
 		rule.setIdleTimeout(IDLE_TIMEOUT_DEFAULT);
 		rule.setHardTimeout(HARD_TIMEOUT_DEFAULT);
-
-		// Set the buffer id to NONE -- implementation artifact
 		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
 
-		// Initialize list of actions
-		ArrayList<OFAction> actions = new ArrayList<OFAction>();
+		short actionsLength = 0;
+		ArrayList<OFAction> actions = null;
+		if (rewrite) {
 
-		// Add action to re-write destination MAC to the MAC of the chosen
-		// server
-		OFAction rewriteMAC = new OFActionDataLayerDestination(forwardServer
-				.getMAC().getBytes());
-		actions.add(rewriteMAC);
+			actions = new ArrayList<OFAction>();
 
-		// Add action to re-write destination IP to the IP of the chosen server
-		OFAction rewriteIP = new OFActionNetworkLayerDestination(
-				(int) forwardServer.getIP());
-		actions.add(rewriteIP);
+			OFAction rewriteMAC = new OFActionDataLayerDestination(
+					forwardServer.getMAC().getBytes());
+			actions.add(rewriteMAC);
 
-		// Add action to output packet
-		OFAction outputTo = new OFActionOutput(forwardServer.getPort());
-		actions.add(outputTo);
+			OFAction rewriteIP = new OFActionNetworkLayerDestination(
+					forwardServer.getIP());
+			actions.add(rewriteIP);
 
-		// Add actions to rule
-		rule.setActions(actions);
-		short actionsLength = (short) (OFActionDataLayerDestination.MINIMUM_LENGTH
-				+ OFActionNetworkLayerDestination.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH);
+			OFAction outputTo = new OFActionOutput(forwardServer.getPort());
+			actions.add(outputTo);
 
-		// Specify the length of the rule structure
+			rule.setActions(actions);
+
+			actionsLength = (short) (OFActionDataLayerDestination.MINIMUM_LENGTH
+					+ OFActionNetworkLayerDestination.MINIMUM_LENGTH 
+					+ OFActionOutput.MINIMUM_LENGTH);
+		}
+
 		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
-
-		log.debug("Actions length="
-				+ (rule.getLength() - OFFlowMod.MINIMUM_LENGTH));
-
-		log.debug("Install rule for forward direction for flow: " + rule);
 
 		try {
 			sw.write(rule, null);
@@ -288,15 +278,22 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 		Long destMac = Ethernet.toLong(flowRemovedMessage.getMatch()
 				.getDataLayerDestination());
 
-		// Update traffic stats for each switch
-
-		Map<Server, OFFlowStatisticsReply> statList = getSwitchStatistics(sw);
-
-		for (Map.Entry<Server, OFFlowStatisticsReply> statEntry : statList
+		// Collect Statistics for each flow that was removed
+		trafficStats.clear();
+		List<Server> serverList = new ArrayList<Server>();
+		for (Map.Entry<Short, RoundRobinServers> entry : portNumberServersMap
 				.entrySet()) {
+			serverList.addAll(entry.getValue().getServers());
 
-			trafficStats.put(statEntry.getKey(), statEntry.getValue()
-					.getPacketCount());
+		}
+		for (Server server : serverList) {
+
+			if (flowRemovedMessage.getMatch().getNetworkDestination() == server
+					.getIP()) {
+
+				Long count = trafficStats.get(server.getIP()) + 1;
+				trafficStats.put(server.getIP(), count);
+			}
 
 		}
 
@@ -318,58 +315,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 	}
 
 	@SuppressWarnings("unchecked")
-	protected Map<Server, OFFlowStatisticsReply> getSwitchStatistics(
-			IOFSwitch sw) {
-
-		Map<Server, OFFlowStatisticsReply> statsReply = new HashMap<Server, OFFlowStatisticsReply>();
-		List<OFStatistics> values = null;
-		Future<List<OFStatistics>> future;
-
-		// Statistics request object for getting flows
-		OFStatisticsRequest request = new OFStatisticsRequest();
-		request.setStatisticType(OFStatisticsType.AGGREGATE);
-
-		OFAggregateStatisticsRequest specificReq = new OFAggregateStatisticsRequest();
-
-		List<Server> servers = new ArrayList<Server>();
-		for (Entry<Short, RoundRobinServers> portServersEntry : portNumberServersMap
-				.entrySet()) {
-			servers.addAll((Collection<? extends Server>) portServersEntry
-					.getValue());
-
-		}
-
-		for (Server server : servers) {
-			
-			specificReq.setMatch(new OFMatch()
-					.setNetworkDestination((int) server.getIP()));
-			request.setStatistics(Collections
-					.singletonList((OFStatistics) specificReq));
-
-			int requestLength = request.getLengthU();
-			requestLength += specificReq.getLength();
-			request.setLengthU(requestLength);
-
-			try {
-				// System.out.println(sw.getStatistics(req));
-				future = sw.getStatistics(request);
-				values = future.get(10, TimeUnit.SECONDS);
-				if (values != null) {
-					for (OFStatistics stat : values) {
-						statsReply.put(server, (OFFlowStatisticsReply) stat);
-					}
-				}
-			} catch (Exception e) {
-				log.error("Failure retrieving statistics from switch " + sw, e);
-			}
-
-		}
-
-		return statsReply;
-	}
-
 	// IOFMessageListener
-
 	@Override
 	public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		switch (msg.getType()) {
@@ -430,7 +376,7 @@ public class LoadBalancer implements IFloodlightModule, IOFMessageListener {
 
 		floodlightProvider = context
 				.getServiceImpl(IFloodlightProviderService.class);
-		trafficStats = new TreeMap<Server, Long>();
+		trafficStats = new TreeMap<Integer, Long>();
 		portNumberServersMap = new HashMap<Short, RoundRobinServers>();
 
 		initializeServers();
