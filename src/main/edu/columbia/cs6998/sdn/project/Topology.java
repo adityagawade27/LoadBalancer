@@ -2,8 +2,11 @@ package main.edu.columbia.cs6998.sdn.project;
 
 import javax.xml.bind.SchemaOutputResolver;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.*;
 
 /**
@@ -12,17 +15,19 @@ import java.util.*;
 
 public class Topology implements ITopology {
 
-    public HashMap<String, Node> getTopology() {
-        return topology;
-    }
-
-    private HashMap<String, Node> topology;
+	private HashMap<String, Node> topology;
     private HashMap<String, String> ipToNodeMap;
     private ArrayList<Node> endHosts;
     private ArrayList<Node> switches;
     private HashMap<NodeNodePair, RouteRREntity> routes;
 
     private static Topology instance;
+    
+    public HashMap<String, Node> getTopology() {
+        return topology;
+    }
+
+    
 
     public static Topology getInstance() {
         if (instance == null) {
@@ -72,9 +77,18 @@ public class Topology implements ITopology {
     }
 
     private void readFromFile() {
-        InputStream in = getClass().getResourceAsStream("sample.output");
+        URL url=null;
+        
+
+
+		try {
+			url = new File("/home/mininet/LoadBalancer/src/main/edu/columbia/cs6998/sdn/project/sample.output").toURI().toURL();
+		} catch (MalformedURLException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
         try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()));
             String line = null;
             Node node1, node2;
             while ((line = reader.readLine()) != null) {
@@ -122,7 +136,8 @@ public class Topology implements ITopology {
     }
 
     public String getMacAddressFromIP(String ipAddress) {
-        return getTopology().get(ipToNodeMap.get(ipAddress)).getMacAddress();
+    	public HashMap<String, Node> hm = getTopology();
+        return hm.get(ipToNodeMap.get(ipAddress)).getMacAddress();
     }
 
     //Ideally this should be calculated from the route
