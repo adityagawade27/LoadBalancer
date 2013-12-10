@@ -129,15 +129,15 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	public void initializeAppServers(){
 		
 		appServers = new ArrayList<Server>();
-		appServers.add(new Server("10.0.0.3",topology.getMacAddressFromIP("10.0.0.3")));
-		appServers.add(new Server("10.0.0.4",topology.getMacAddressFromIP("10.0.0.4")));
+		appServers.add(new Server("10.0.0.1",topology.getMacAddressFromIP("10.0.0.1")));
 		appServers.add(new Server("10.0.0.5",topology.getMacAddressFromIP("10.0.0.5")));
 		appServers.add(new Server("10.0.0.6",topology.getMacAddressFromIP("10.0.0.6")));
+		appServers.add(new Server("10.0.0.7",topology.getMacAddressFromIP("10.0.0.7")));
 		
 		portNumberServersMap.put((short)8080,appServers);
 	}
 	
-	/**
+	/*
 	 * Tells the Floodlight core we are interested in PACKET_IN messages.
 	 * Important to override! 
 	 * */
@@ -185,6 +185,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// Read in packet data headers by using OFMatch
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
+		
 		
 		Integer curDestIPAddress = match.getNetworkDestination();
 		String curDestIPString = IPv4.fromIPv4Address(curDestIPAddress);
@@ -263,8 +264,8 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		OFMatch match = new OFMatch();
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 
-		Short appPort = match.getTransportDestination();
-
+		Short appPort = 8080;//= match.getTransportDestination();
+		System.out.println("MYD:appPort"+ appPort.toString());
 		// If no stats available use Round Robin
 		if (portServerPacketCountMap.isEmpty()) {
 
