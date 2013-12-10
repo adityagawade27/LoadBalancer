@@ -11,7 +11,7 @@ FL_PROPERTYFILE="${FL_HOME}/resources/floodlighthw1.properties"
 # Set JVM options
 JVM_OPTS=""
 JVM_OPTS="$JVM_OPTS -server -d64"
-JVM_OPTS="$JVM_OPTS -Xmx2g -Xms2g -Xmn800m"
+JVM_OPTS="$JVM_OPTS -Xmx1g -Xms1g -Xmn800m"
 JVM_OPTS="$JVM_OPTS -XX:+UseParallelGC -XX:+AggressiveOpts -XX:+UseFastAccessorMethods"
 JVM_OPTS="$JVM_OPTS -XX:MaxInlineSize=8192 -XX:FreqInlineSize=8192"
 JVM_OPTS="$JVM_OPTS -XX:CompileThreshold=1500 -XX:PreBlockSpin=8"

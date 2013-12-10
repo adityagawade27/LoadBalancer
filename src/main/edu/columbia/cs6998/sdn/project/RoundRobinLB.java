@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
  * Module to perform round-robin load balancing.
  * 
  */
-public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
+public class RoundRobinLB implements IOFMessageListener, IFloodlightModule {
 
 	// Interface to Floodlight core for interacting with connected switches
 	protected IFloodlightProviderService floodlightProvider;
@@ -292,7 +292,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	}
 
 
-
+	
 	private void loadBalanceFlow(Server server,IOFSwitch sw, OFPacketIn pi) {
 		// TODO Implemented round-robin load balancing
 		
@@ -393,6 +393,13 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
             logger.error("failed to write packetOut: ", e);
         }
 	}
+	
+	/**
+	 * Performs load balancing based on a packet-in OpenFlow message for an 
+	 * IPv4 packet destined for our logical load balancer.
+	 */
+	
+	
 
 
 }
