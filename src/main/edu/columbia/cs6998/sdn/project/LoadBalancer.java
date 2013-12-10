@@ -1,6 +1,8 @@
 package main.edu.columbia.cs6998.sdn.project;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -157,7 +159,12 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		
 		switch (msg.getType()) {
 		case PACKET_IN:
-			return this.processPacketInMessage(sw, (OFPacketIn) msg, cntx);
+			try {
+				return this.processPacketInMessage(sw, (OFPacketIn) msg, cntx);
+			} catch (Exception e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 
 		case FLOW_REMOVED:
 			try {
@@ -178,9 +185,38 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	}
     
 	
+//	String to int:
+
+		int pack(byte[] bytes) {
+		  int val = 0;
+		  for (int i = 0; i < bytes.length; i++) {
+		    val <<= 8;
+		    val |= bytes[i] & 0xff;
+		  }
+		  return val;
+		}
+
+	//	pack(InetAddress.getByName(dottedString).getAddress());
+
+		//Int to string:
+
+		byte[] unpack(int bytes) {
+		  return new byte[] {
+		    (byte)((bytes >>> 24) & 0xff),
+		    (byte)((bytes >>> 16) & 0xff),
+		    (byte)((bytes >>>  8) & 0xff),
+		    (byte)((bytes       ) & 0xff)
+		  };
+		}
+
+
+		//InetAddress.getByAddress(unpack(packedBytes)).getHostAddress()
+
+
+	
 	
 	private Command processPacketInMessage(IOFSwitch sw, OFPacketIn pi,
-			FloodlightContext cntx) {
+			FloodlightContext cntx) throws Exception {
 
 		// Read in packet data headers by using OFMatch
 		OFMatch match = new OFMatch();
@@ -188,17 +224,19 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		
 		
 		Integer curDestIPAddress = match.getNetworkDestination();
-		String curDestIPString = IPv4.fromIPv4Address(curDestIPAddress);
+		String curDestIPString  = InetAddress.getByAddress(unpack(curDestIPAddress)).getHostAddress();
+		//String curDestIPString = IPv4.fromIPv4Address(curDestIPAddress);
 		//String destMACAddress = new String(match.getDataLayerDestination());
 
-		
+		System.out.println("MYD: " + sw.getStringId());
 		Node currentSwitch = topology.getTopology().get(sw.getStringId());
 		Server destServer = null;
 	
 		if (curDestIPAddress == LOAD_BALANCER_IP) {
 			
 			destServer = getDestServer(sw, pi);
-			String destIP = IPv4.fromIPv4Address(destServer.getIP());	
+			String destIP = destServer.getIP();	
+
 			short outPort = topology.getNextHop(destIP,currentSwitch);
 			destServer.setPort(outPort);
 	
@@ -232,12 +270,14 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// Collect Statistics for each flow that was removed
 		portServerPacketCountMap.clear();
 		Node currentSwitch = topology.getTopology().get(sw.getStringId());
-	
-		if (topology.isNextHop(currentSwitch,IPv4.fromIPv4Address(destIP))) {
+		
+		String dstipstr = InetAddress.getByAddress(unpack(destIP)).getHostAddress();
+		
+		if (topology.isNextHop(currentSwitch,(dstipstr))) {
 
 			Integer count = (int) (portServerPacketCountMap.get(appPort).get(
-					IPv4.fromIPv4Address(destIP)) + flowRemovedMessage.getPacketCount());
-			portServerPacketCountMap.get(appPort).put(IPv4.fromIPv4Address(destIP), count);
+					(destIP)) + flowRemovedMessage.getPacketCount());
+			portServerPacketCountMap.get(appPort).put((dstipstr), count);
 
 		}
 
@@ -270,7 +310,10 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		if (portServerPacketCountMap.isEmpty()) {
 
 			List<Server> servers = portNumberServersMap.get(appPort);
+			
 			lastServer = (lastServer + 1) % servers.size();
+			System.out.println("MYD: Lastserver"+lastServer);
+			System.out.println(servers.get(lastServer).getIP());
 			return servers.get(lastServer);
 
 		} else { // Get least loaded server
@@ -287,7 +330,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	}
 
 
-	private void processRuleAndPushPacket(Server server,IOFSwitch sw, OFPacketIn pi) {
+	private void processRuleAndPushPacket(Server server,IOFSwitch sw, OFPacketIn pi) throws Exception {
 		// TODO Implemented round-robin load balancing
 		
 		
@@ -319,7 +362,9 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		actions.add(rewriteMAC);
 		
 		// Add action to re-write destination IP to the IP of the chosen server
-		OFAction rewriteIP = new OFActionNetworkLayerDestination(server.getIP());
+		OFAction rewriteIP = new OFActionNetworkLayerDestination(
+				pack(InetAddress.getByName(server.getIP()).getAddress())
+				);
 		actions.add(rewriteIP);
 			
 		// Add action to output packet

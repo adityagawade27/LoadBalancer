@@ -207,6 +207,7 @@ public class Topology implements ITopology {
         Node srcNode = topology.get(name);
         NodeNodePair pair = new NodeNodePair(srcNode, topology.get(ipToNodeMap.get(dstIP)));
         RouteRREntity routeRREntity = routes.get(pair);
+        System.out.println("MYD: "+dstIP+ srcNode);
         List<FinalRoute> finalRoutes = routeRREntity.getRoutes();
         if (finalRoutes.size() == 1) {
             return finalRoutes.get(0).getFirstHop();
