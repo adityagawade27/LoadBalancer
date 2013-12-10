@@ -334,7 +334,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// Specify the length of the rule structure
 		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
 		
-		//logger.debug("Actions length="+ (rule.getLength() - OFFlowMod.MINIMUM_LENGTH));
+		//logger.debug("Actions length="+ (rule.getLength() - destIPOFFlowMod.MINIMUM_LENGTH));
 		
 		//logger.debug("Install rule for forward direction for flow: " + rule);
 			
@@ -345,7 +345,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		}	
 
 		
-		pushPacket(sw, pi, actions, actionsLength);
+		pushPacket(sw, pi, actions, actionsLength);destIP
 	}
 	
 	/**
