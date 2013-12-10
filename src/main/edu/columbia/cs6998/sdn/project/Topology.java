@@ -44,12 +44,6 @@ public class Topology implements ITopology {
         initialize();
     }
 
-    public HashMap<String,Node> getTopology(){
-    	
-    	return topology;
-    }
-    
-   
     
     private void initialize() {
         //Read the topology from the file here

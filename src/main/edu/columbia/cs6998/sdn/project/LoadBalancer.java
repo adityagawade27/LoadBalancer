@@ -58,7 +58,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	private final static short HARD_TIMEOUT = 0; // infinite
 	
 	private Map<Short, ArrayList<Server>> portNumberServersMap= new HashMap<Short, ArrayList<Server>>();
-	private Map<Short, TreeMap<Integer, Integer>> portServerPacketCountMap;
+	private Map<Short, TreeMap<String, Integer>> portServerPacketCountMap;
 	private ArrayList<Server> appServers;
 
 	
@@ -120,7 +120,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			throws FloodlightModuleException {
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 		logger = LoggerFactory.getLogger(LoadBalancer.class);
-		portServerPacketCountMap = new HashMap<Short, TreeMap<Integer, Integer>>();
+		portServerPacketCountMap = new HashMap<Short, TreeMap<String, Integer>>();
 		
 		topology = Topology.getInstance();
 		initializeAppServers();
@@ -129,10 +129,10 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	public void initializeAppServers(){
 		
 		appServers = new ArrayList<Server>();
-		appServers.add(new Server("10.0.0.3",topology.getMAC("10.0.0.3")));
-		appServers.add(new Server("10.0.0.4",topology.getMAC("10.0.0.4")));
-		appServers.add(new Server("10.0.0.5",topology.getMAC("10.0.0.5")));
-		appServers.add(new Server("10.0.0.6",topology.getMAC("10.0.0.6")));
+		appServers.add(new Server("10.0.0.3",topology.getMacAddressFromIP("10.0.0.3")));
+		appServers.add(new Server("10.0.0.4",topology.getMacAddressFromIP("10.0.0.4")));
+		appServers.add(new Server("10.0.0.5",topology.getMacAddressFromIP("10.0.0.5")));
+		appServers.add(new Server("10.0.0.6",topology.getMacAddressFromIP("10.0.0.6")));
 		
 		portNumberServersMap.put((short)8080,appServers);
 	}
@@ -188,7 +188,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		
 		Integer curDestIPAddress = match.getNetworkDestination();
 		String curDestIPString = IPv4.fromIPv4Address(curDestIPAddress);
-		String destMACAddress = new String(match.getDataLayerDestination());
+		//String destMACAddress = new String(match.getDataLayerDestination());
 
 		
 		Node currentSwitch = topology.getTopology().get(sw.getStringId());
@@ -207,6 +207,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			destServer = new Server();
 			destServer.setPort(outPort);
 			destServer.setIP(curDestIPString);
+			destServer.setMAC(topology.getMacAddressFromIP(curDestIPString));
 			
 
 		}
@@ -231,11 +232,11 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		portServerPacketCountMap.clear();
 		Node currentSwitch = topology.getTopology().get(sw.getStringId());
 	
-		if (topology.isNextHop(currentSwitch,destIP)) {
+		if (topology.isNextHop(currentSwitch,IPv4.fromIPv4Address(destIP))) {
 
 			Integer count = (int) (portServerPacketCountMap.get(appPort).get(
-					destIP) + flowRemovedMessage.getPacketCount());
-			portServerPacketCountMap.get(appPort).put(destIP, count);
+					IPv4.fromIPv4Address(destIP)) + flowRemovedMessage.getPacketCount());
+			portServerPacketCountMap.get(appPort).put(IPv4.fromIPv4Address(destIP), count);
 
 		}
 
@@ -273,11 +274,11 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		} else { // Get least loaded server
 
-			Integer destIP = portServerPacketCountMap.get(appPort).firstEntry()
+			String destIP = portServerPacketCountMap.get(appPort).firstEntry()
 					.getKey();
 			Server server = new Server();
 			server.setIP(destIP);
-			server.setMac()
+			server.setMAC(topology.getMacAddressFromIP(destIP));
 			return server;
 
 		}

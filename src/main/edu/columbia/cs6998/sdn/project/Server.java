@@ -20,6 +20,11 @@ public class Server {
 	public Server(String ip){
 		ipAddress = ip;
 	}
+	public Server(String ip, String mac) {
+		ipAddress = ip;
+		macAddress = mac;
+	}
+
 	public void setIP(int ip){
 		
 		ipAddress = IPv4.fromIPv4Address(ip);
