@@ -3,9 +3,27 @@ package main.edu.columbia.cs6998.sdn.project;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
 
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IOFMessageListener;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.IListener.Command;
+import net.floodlightcontroller.core.module.FloodlightModuleContext;
+import net.floodlightcontroller.core.module.FloodlightModuleException;
+import net.floodlightcontroller.core.module.IFloodlightModule;
+import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
+
+import org.openflow.protocol.OFError;
 import org.openflow.protocol.OFFlowMod;
+import org.openflow.protocol.OFFlowRemoved;
 import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFPacketIn;
@@ -13,24 +31,12 @@ import org.openflow.protocol.OFPacketOut;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.action.OFAction;
 import org.openflow.protocol.action.OFActionDataLayerDestination;
-import org.openflow.protocol.action.OFActionDataLayerSource;
 import org.openflow.protocol.action.OFActionNetworkLayerDestination;
-import org.openflow.protocol.action.OFActionNetworkLayerSource;
 import org.openflow.protocol.action.OFActionOutput;
+import org.openflow.util.HexString;
 import org.openflow.util.U16;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import net.floodlightcontroller.core.FloodlightContext;
-import net.floodlightcontroller.core.IFloodlightProviderService;
-import net.floodlightcontroller.core.IOFMessageListener;
-import net.floodlightcontroller.core.IOFSwitch;
-import net.floodlightcontroller.core.module.FloodlightModuleContext;
-import net.floodlightcontroller.core.module.FloodlightModuleException;
-import net.floodlightcontroller.core.module.IFloodlightModule;
-import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.packet.Ethernet;
-import net.floodlightcontroller.packet.IPv4;
 
 /**
  * Module to perform round-robin load balancing.
@@ -51,6 +57,10 @@ public class RoundRobinLB implements IOFMessageListener, IFloodlightModule {
 	// Rule timeouts
 	private final static short IDLE_TIMEOUT = 60; // in seconds
 	private final static short HARD_TIMEOUT = 0; // infinite
+	
+	private Map<Short, ArrayList<Server>> portNumberServersMap;
+	private Map<Short, TreeMap<Integer, Integer>> portServerPacketCountMap;
+
 	
 	private static class Server
 	{
@@ -138,6 +148,8 @@ public class RoundRobinLB implements IOFMessageListener, IFloodlightModule {
 			throws FloodlightModuleException {
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
 		logger = LoggerFactory.getLogger(LoadBalancer.class);
+		portServerPacketCountMap = new HashMap<Short, TreeMap<Integer, Integer>>();
+		portNumberServersMap = new HashMap<Short, ArrayList<Server>>();
 	}
 
 	/**
@@ -147,6 +159,7 @@ public class RoundRobinLB implements IOFMessageListener, IFloodlightModule {
 	@Override
 	public void startUp(FloodlightModuleContext context) {
 		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
+		
 	}
 	
 	/**
@@ -157,84 +170,132 @@ public class RoundRobinLB implements IOFMessageListener, IFloodlightModule {
 	public net.floodlightcontroller.core.IListener.Command receive(
 			IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
 		
-		// We only care about packet-in messages
-		if (msg.getType() != OFType.PACKET_IN) { 
-			// Allow the next module to also process this OpenFlow message
-		    return Command.CONTINUE;
-		}
-		OFPacketIn pi = (OFPacketIn)msg;
-				
-		// Parse the received packet		
-        OFMatch match = new OFMatch();
-        match.loadFromPacket(pi.getPacketData(), pi.getInPort());
-        
-		// We only care about TCP packets
-		if (match.getDataLayerType() != Ethernet.TYPE_IPv4 || match.getNetworkProtocol() != IPv4.PROTOCOL_TCP) {
-			// Allow the next module to also process this OpenFlow message
-		    return Command.CONTINUE;
-		}
+		switch (msg.getType()) {
+		case PACKET_IN:
+			return this.processPacketInMessage(sw, (OFPacketIn) msg, cntx);
+
+		case FLOW_REMOVED:
+			try {
+				return this.processFlowRemovedMessage(sw, (OFFlowRemoved) msg);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+		case ERROR:
+			logger.info("received an error {} from switch {}", (OFError) msg, sw);
+			return Command.CONTINUE;
 		
-		// We only care about packets which are sent to the logical load balancer
-		if (match.getNetworkDestination() != LOAD_BALANCER_IP) {
-			// Allow the next module to also process this OpenFlow message
-		    return Command.CONTINUE;
+		default:
+			break;
 		}
-		
-		logger.debug("Received an IPv4 packet destined for the load balancer");
-		
-		loadBalanceFlow(sw, pi);
-       
-		// Do not continue processing this OpenFlow message
+		logger.error("received an unexpected message {} from switch {}", msg, sw);
 		return Command.STOP;
-    }
+	}
+    
 	
-	/**
-	 * Sends a packet out to the switch
-	 */
-	private void pushPacket(IOFSwitch sw, OFPacketIn pi, 
-			ArrayList<OFAction> actions, short actionsLength) {
+	
+	private Command processPacketInMessage(IOFSwitch sw, OFPacketIn pi,
+			FloodlightContext cntx) {
+
+		// Read in packet data headers by using OFMatch
+		OFMatch match = new OFMatch();
+		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 		
-		// create an OFPacketOut for the pushed packet
-        OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
-                		.getMessage(OFType.PACKET_OUT);        
-        
-        // Update the inputPort and bufferID
-        po.setInPort(pi.getInPort());
-        po.setBufferId(pi.getBufferId());
-                
-        // Set the actions to apply for this packet		
-		po.setActions(actions);
-		po.setActionsLength(actionsLength);
-	        
-        // Set data if it is included in the packet in but buffer id is NONE
-        if (pi.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
-            byte[] packetData = pi.getPacketData();
-            po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
-                    + po.getActionsLength() + packetData.length));
-            po.setPacketData(packetData);
-        } else {
-            po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
-                    + po.getActionsLength()));
-        }        
-        
-       // logger.debug("Push packet to switch: "+po);
-        
-        // Push the packet to the switch
-        try {
-            sw.write(po, null);
-        } catch (IOException e) {
-            logger.error("failed to write packetOut: ", e);
-        }
+		Integer destIPAddress = match.getNetworkDestination();
+		String destMACAddress = new String(match.getDataLayerDestination());
+
+		//Server server = new Server(IPv4.fromIPv4Address(destIPAddress), destMACAddress,(short)0);
+
+		if (destIPAddress == LOAD_BALANCER_IP) {
+
+			logger.info("Virtual IP PKT received ");
+			//logger.info("Destination MAC Address " + server.getMAC());
+			//logger.info("Destination IP Address " + server.getIP());
+			
+			//server = getDestServer(sw, pi);
+			//server = getNextHop(server, sw, pi);
+			//processRuleAndPushPacket(server, sw, pi, true);
+
+		} else {
+
+			//server = getNextHop(server, sw, pi); // TODO
+			//processRuleAndPushPacket(server, sw, pi, false);
+
+		}
+
+		return Command.CONTINUE;
 	}
 	
-	/**
-	 * Performs load balancing based on a packet-in OpenFlow message for an 
-	 * IPv4 packet destined for our logical load balancer.
-	 */
-	private void loadBalanceFlow(IOFSwitch sw, OFPacketIn pi) {
+	private Command processFlowRemovedMessage(IOFSwitch sw,
+			OFFlowRemoved flowRemovedMessage) throws IOException,
+			InterruptedException, ExecutionException {
+
+		Long sourceMac = Ethernet.toLong(flowRemovedMessage.getMatch()
+				.getDataLayerSource());
+		Long destMac = Ethernet.toLong(flowRemovedMessage.getMatch()
+				.getDataLayerDestination());
+
+		Integer destIP = flowRemovedMessage.getMatch().getNetworkDestination();
+		Short appPort = flowRemovedMessage.getMatch().getTransportDestination();
+
+		// Collect Statistics for each flow that was removed
+		portServerPacketCountMap.clear();
+		/*if (isNextHop(sw, destIP)) {
+
+			Integer count = (int) (portServerPacketCountMap.get(appPort).get(
+					destIP) + flowRemovedMessage.getPacketCount());
+			portServerPacketCountMap.get(appPort).put(destIP, count);
+
+		}*/
+
+		if (logger.isTraceEnabled()) {
+			logger.trace("{} flow entry removed {}", sw,
+					HexString.toHexString(sourceMac));
+		}
+
+		logger.info(
+				"{} flow entry removed {} used Bytes:"
+						+ flowRemovedMessage.getByteCount(), sw,
+				HexString.toHexString(sourceMac));
+		logger.info(
+				"{} flow entry removed {} used Bytes:"
+						+ flowRemovedMessage.getByteCount(), sw,
+				HexString.toHexString(destMac));
+
+		return Command.CONTINUE;
+	}
+	
+	
+	private Server getDestServer(IOFSwitch sw, OFPacketIn pi) {
+
+		OFMatch match = new OFMatch();
+		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
+
+		Short appPort = match.getTransportDestination();
+
+		// If no stats available use Round Robin
+		if (portServerPacketCountMap.isEmpty()) {
+
+			List<Server> servers = portNumberServersMap.get(appPort);
+			lastServer = (lastServer + 1) % servers.size();
+			return servers.get(lastServer);
+
+		} else { // Get least loaded server
+
+			Integer destIP = portServerPacketCountMap.get(appPort).firstEntry()
+					.getKey();
+			Server server = new Server(IPv4.fromIPv4Address(destIP),null,(short)0);
+			return server;
+
+		}
+
+	}
+
+
+	
+	private void loadBalanceFlow(Server server,IOFSwitch sw, OFPacketIn pi) {
 		// TODO Implemented round-robin load balancing
 		
-		Server server = getNextServer();
 		
 		// Create a flow table modification message to add a rule
     	OFFlowMod rule = new OFFlowMod();
@@ -295,11 +356,50 @@ public class RoundRobinLB implements IOFMessageListener, IFloodlightModule {
 	}
 	
 	/**
-	 * Determines the next server to which a flow should be sent.
+	 * Sends a packet out to the switch
 	 */
-	private Server getNextServer() {
-		lastServer = (lastServer + 1) % SERVERS.length;
-		return SERVERS[lastServer];
+	private void pushPacket(IOFSwitch sw, OFPacketIn pi, 
+			ArrayList<OFAction> actions, short actionsLength) {
+		
+		// create an OFPacketOut for the pushed packet
+        OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
+                		.getMessage(OFType.PACKET_OUT);        
+        
+        // Update the inputPort and bufferID
+        po.setInPort(pi.getInPort());
+        po.setBufferId(pi.getBufferId());
+                
+        // Set the actions to apply for this packet		
+		po.setActions(actions);
+		po.setActionsLength(actionsLength);
+	        
+        // Set data if it is included in the packet in but buffer id is NONE
+        if (pi.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {
+            byte[] packetData = pi.getPacketData();
+            po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
+                    + po.getActionsLength() + packetData.length));
+            po.setPacketData(packetData);
+        } else {
+            po.setLength(U16.t(OFPacketOut.MINIMUM_LENGTH
+                    + po.getActionsLength()));
+        }        
+        
+       // logger.debug("Push packet to switch: "+po);
+        
+        // Push the packet to the switch
+        try {
+            sw.write(po, null);
+        } catch (IOException e) {
+            logger.error("failed to write packetOut: ", e);
+        }
 	}
+	
+	/**
+	 * Performs load balancing based on a packet-in OpenFlow message for an 
+	 * IPv4 packet destined for our logical load balancer.
+	 */
+	
+	
+
 
 }
