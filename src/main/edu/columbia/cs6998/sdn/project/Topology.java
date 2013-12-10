@@ -1,9 +1,7 @@
 package main.edu.columbia.cs6998.sdn.project;
 
-import javax.xml.bind.SchemaOutputResolver;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -17,6 +15,7 @@ public class Topology implements ITopology {
 
 	private HashMap<String, Node> topology;
     private HashMap<String, String> ipToNodeMap;
+    private HashMap<String, String> macToNodeMap;
     private ArrayList<Node> endHosts;
     private ArrayList<Node> switches;
     private HashMap<NodeNodePair, RouteRREntity> routes;
@@ -43,6 +42,7 @@ public class Topology implements ITopology {
     private Topology() {
         topology = new HashMap<>();
         ipToNodeMap = new HashMap<>();
+        macToNodeMap = new HashMap<>();
         endHosts = new ArrayList<>();
         switches = new ArrayList<>();
         routes = new HashMap<>();
@@ -132,12 +132,12 @@ public class Topology implements ITopology {
         node.addPort(Short.parseShort(s1));
         topology.put(node.getName(), node);
         ipToNodeMap.put(node.getIpAddress(),node.getName());
+        macToNodeMap.put(node.getMacAddress(),node.getName());
         return node;
     }
 
     public String getMacAddressFromIP(String ipAddress) {
-    	public HashMap<String, Node> hm = getTopology();
-        return hm.get(ipToNodeMap.get(ipAddress)).getMacAddress();
+        return getTopology().get(ipToNodeMap.get(ipAddress)).getMacAddress();
     }
 
     //Ideally this should be calculated from the route
@@ -203,7 +203,8 @@ public class Topology implements ITopology {
     }
 
     @Override
-    public short getNextHop(String dstIP, Node srcNode) {
+    public short getNextHop(String dstIP, String macAddress) {
+        Node srcNode = topology.get(macToNodeMap.get(macAddress));
         NodeNodePair pair = new NodeNodePair(srcNode, topology.get(ipToNodeMap.get(dstIP)));
         RouteRREntity routeRREntity = routes.get(pair);
         List<FinalRoute> finalRoutes = routeRREntity.getRoutes();

@@ -1,7 +1,5 @@
 package main.edu.columbia.cs6998.sdn.project;
 
-
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,7 +9,7 @@ import java.util.Map;
  * Created by Niket Kandya on 12/10/13.
  */
 public interface ITopology {
-    short getNextHop(String ipAddress, Node srcNode);
+    short getNextHop(String ipAddress, String macAddress);
 }
 
 class RouteRREntity {
