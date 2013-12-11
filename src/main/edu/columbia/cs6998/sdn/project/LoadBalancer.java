@@ -29,6 +29,7 @@ import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFPacketIn;
 import org.openflow.protocol.OFPacketOut;
+import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.action.OFAction;
 import org.openflow.protocol.action.OFActionDataLayerDestination;
@@ -36,6 +37,7 @@ import org.openflow.protocol.action.OFActionNetworkLayerDestination;
 import org.openflow.protocol.action.OFActionOutput;
 import org.openflow.util.HexString;
 import org.openflow.util.U16;
+import org.python.google.common.primitives.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -354,32 +356,39 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	        
 	    // Set the buffer id to NONE -- implementation artifact
 		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-	       
+	    int actionsLength =  0;
         // Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
 		
 		// Add action to re-write destination MAC to the MAC of the chosen server
-		OFAction rewriteMAC = new OFActionDataLayerDestination(server.getMAC().getBytes());
+		byte [] b = server.getMAC().getBytes();
+		OFAction rewriteMAC = new OFActionDataLayerDestination(b);
+		System.out.println("RewriteMac"+server.getMAC()+" Byte arra "+b.length);
 		actions.add(rewriteMAC);
-		
+		actionsLength += rewriteMAC.getLengthU()+10;
+		System.out.println("LenU "+ actionsLength +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
 		// Add action to re-write destination IP to the IP of the chosen server
 		OFAction rewriteIP = new OFActionNetworkLayerDestination(
 				pack(InetAddress.getByName(server.getIP()).getAddress())
 				);
 		actions.add(rewriteIP);
-			
+		actionsLength += rewriteIP.getLengthU();
+		System.out.println("actionsU "+ actionsLength+"rewriteIP "+rewriteIP.getLength() +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
+		
 		// Add action to output packet
-		OFAction outputTo = new OFActionOutput(server.getPort());
+		OFAction outputTo = new OFActionOutput().setPort(OFPort.OFPP_IN_PORT.getValue());
+				//(server.getPort());
 		actions.add(outputTo);
+		actionsLength += outputTo.getLengthU();
 		
 		// Add actions to rule
 		rule.setActions(actions);
-		short actionsLength = (short)(OFActionDataLayerDestination.MINIMUM_LENGTH
+	/*	short actionsLength = (short)(OFActionDataLayerDestination.MINIMUM_LENGTH
 				+ OFActionNetworkLayerDestination.MINIMUM_LENGTH
 				+ OFActionOutput.MINIMUM_LENGTH);
-		
+		*/
 		// Specify the length of the rule structure
-		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
+		rule.setLengthU(OFFlowMod.MINIMUM_LENGTH + actionsLength);
 		
 		//logger.debug("Actions length="+ (rule.getLength() - destIPOFFlowMod.MINIMUM_LENGTH));
 		
@@ -399,7 +408,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	 * Sends a packet out to the switch
 	 */
 	private void pushPacket(IOFSwitch sw, OFPacketIn pi, 
-			ArrayList<OFAction> actions, short actionsLength) {
+			ArrayList<OFAction> actions, int actionsLength) {
 		
 		// create an OFPacketOut for the pushed packet
         OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
@@ -411,7 +420,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
                 
         // Set the actions to apply for this packet		
 		po.setActions(actions);
-		po.setActionsLength(actionsLength);
+		po.setActionsLength((short) actionsLength);
 	        
         // Set data if it is included in the packet in but buffer id is NONE
         if (pi.getBufferId() == OFPacketOut.BUFFER_ID_NONE) {

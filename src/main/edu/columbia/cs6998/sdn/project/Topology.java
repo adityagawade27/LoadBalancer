@@ -162,7 +162,6 @@ public class Topology implements ITopology {
     }
 
     private List<FinalRoute> calcRoutes(Node swtch, Node host) {
-        System.out.println("Entering calcRoutes");
         List<FinalRoute> retVal = new ArrayList<>();
         Deque<FinalRoute> queue = new ArrayDeque<>();
         String last;
@@ -188,7 +187,6 @@ public class Topology implements ITopology {
                 }
             }
         }
-        System.out.println("Exiting calcRoutes");
         return retVal;
     }
 
