@@ -488,10 +488,13 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			System.out.println("RewriteMac "+server.getMAC()+" Byte array "+rewriteMAC.getDataLayerAddress().toString());
 			rewriteMAC.setType(OFActionType.SET_DL_DST);
 			actions.add(rewriteMAC);
-			actionsLength += rewriteMAC.MINIMUM_LENGTH;
+			actionsLength += rewriteMAC.getLength();
 			//actionsLength += rewriteMAC.getLengthU();
 			System.out.println("LenU "+ actionsLength +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
-			System.out.println("Size b: "+b.length+" Action Size: "+ rewriteMAC.getLengthU()+" | "+rewriteMAC.getLength());
+			System.out.println("Size b: "+b.length+" Action Size: "+ 
+			rewriteMAC.getLengthU()+" | "+OFAction.OFFSET_LENGTH+ 
+			" Offset type"+OFAction.OFFSET_TYPE);
+			
 			// Add action to re-write destination IP to the IP of the chosen server
 
 			OFActionNetworkLayerDestination rewriteIP = new OFActionNetworkLayerDestination(
@@ -519,7 +522,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		 */
 		// Specify the length of the rule structure
 		
-		rule.setLength((short) 1);//(OFFlowMod.MINIMUM_LENGTH + actionsLength));
+		rule.setLength((short) (OFFlowMod.MINIMUM_LENGTH + actionsLength));
 		
 		//logger.debug("Actions length="+ (rule.getLength() - destIPOFFlowMod.MINIMUM_LENGTH));
 
@@ -532,7 +535,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		}	
 
 
-		//		pushPacket(sw, pi, actions, actionsLength);
+//				pushPacket(sw, pi, actions, actionsLength);
 	}
 
 	/**
