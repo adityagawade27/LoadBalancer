@@ -2,6 +2,7 @@ package main.edu.columbia.cs6998.sdn.project;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -56,13 +57,10 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	protected static Logger logger;
 
 	// IP and MAC address for our logical load balancer
-	private final static int LOAD_BALANCER_IP = IPv4.toIPv4Address("10.0.0.254");
-	//private final static byte[] LOAD_BALANCER_MAC =  Ethernet.toMACAddress("00:00:00:00:00:FE");
-	private final static byte[] LOAD_BALANCER_MAC =  Ethernet.toMACAddress("66:15:95:e3:33:69");
 
 	// Rule timeouts
 	private final static short IDLE_TIMEOUT = 60; // in seconds
-	private final static short HARD_TIMEOUT = 0; // infinite
+	private final static short HARD_TIMEOUT = 60; // infinite
 
 	private Map<Short, ArrayList<Server>> portNumberServersMap= new HashMap<Short, ArrayList<Server>>();
 	private Map<Short, TreeMap<String, Integer>> portServerPacketCountMap;
@@ -240,7 +238,17 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		/* The IP address of the (yet unknown) ARP target. */
 		long targetIPAddress = IPv4.toIPv4Address(arp.getTargetProtocolAddress());
 		/* The MAC address of the (yet unknown) ARP target. */
-		long targetMACAddress = Ethernet.toLong(LOAD_BALANCER_MAC);
+
+		String ipAddress=null;
+		try {
+			ipAddress = InetAddress.getByAddress(unpack(
+					IPv4.toIPv4Address(arp.getTargetProtocolAddress()))).getHostAddress();
+		} catch (UnknownHostException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		long targetMACAddress = Ethernet.toLong(Ethernet.toMACAddress(
+				topology.getMacAddressFromIP(ipAddress))); 
 
 
 		IPacket arpReply = new Ethernet()
@@ -277,7 +285,10 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	protected void sendPOMessage(IPacket packet, IOFSwitch sw, short port) {                
 		// Serialize and wrap in a packet out
 		byte[] data = packet.serialize();
-		OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory().getMessage(OFType.PACKET_OUT);
+		OFPacketOut po = (OFPacketOut) 
+				floodlightProvider
+				.getOFMessageFactory()
+				.getMessage(OFType.PACKET_OUT);
 		po.setBufferId(OFPacketOut.BUFFER_ID_NONE);
 		po.setInPort(OFPort.OFPP_NONE);
 
@@ -310,7 +321,8 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		Ethernet ethPacket = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
 
-		System.out.println(sw.toString());
+		System.out.println("\n PacketRecived->");
+		System.out.print(sw.toString());
 		System.out.println(ethPacket.toString());
 
 
@@ -321,6 +333,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			arp = (ARP) ethPacket.getPayload();
 
 			if( arp.getOpCode() == ARP.OP_REQUEST ) {
+
 
 
 				return this.handleARPRequest(arp, sw.getId(), pi.getInPort(), cntx);
@@ -335,14 +348,16 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			//String destMACAddress = new String(match.getDataLayerDestination());
 
 			Server destServer = null;
+			boolean rewrite=false;
 
-			if (curDestIPAddress == LOAD_BALANCER_IP) {
+			if (curDestIPString.equals(Topology.LOAD_BALANCER_IP)) {
 
 				destServer = getDestServer(sw, pi);
 				String destIP = destServer.getIP();
 
 				short outPort = topology.getNextHop(destIP,"s"+sw.getId());
 				destServer.setPort(outPort);
+				rewrite = true;
 
 			} else {
 
@@ -353,8 +368,10 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 				destServer.setMAC(topology.getMacAddressFromIP(curDestIPString));
 
 			}
-
-			processRuleAndPushPacket(destServer, sw, pi);
+			//			IPv4 ip = new IPv4();
+			//			ip = (IPv4) ethPacket.getPayload();
+			//			sendPOMessage(ip, sw, destServer.getPort());
+			processRuleAndPushPacket(destServer, sw, pi,rewrite);
 		}
 		return Command.CONTINUE;
 	}
@@ -363,6 +380,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			OFFlowRemoved flowRemovedMessage) throws IOException,
 			InterruptedException, ExecutionException {
 
+		System.out.println("Flow Removed for\n"+sw);
 		Long sourceMac = Ethernet.toLong(flowRemovedMessage.getMatch()
 				.getDataLayerSource());
 		Long destMac = Ethernet.toLong(flowRemovedMessage.getMatch()
@@ -414,6 +432,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 			List<Server> servers = portNumberServersMap.get(appPort);
 			lastServer = (lastServer + 1) % servers.size();
+			System.out.println("Lastserver: "+lastServer);
 			return servers.get(lastServer);
 
 		} else { // Get least loaded server
@@ -423,6 +442,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			Server server = new Server();
 			server.setIP(destIP);
 			server.setMAC(topology.getMacAddressFromIP(destIP));
+			System.out.println("Server: "+server);
 			return server;
 
 		}
@@ -430,7 +450,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	}
 
 
-	private void processRuleAndPushPacket(Server server,IOFSwitch sw, OFPacketIn pi) throws Exception {
+	private void processRuleAndPushPacket(Server server,IOFSwitch sw, OFPacketIn pi, boolean rewrite) throws Exception {
 		// TODO Implemented round-robin load balancing
 
 
@@ -445,6 +465,10 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		// Match exact flow -- i.e., no wildcards
 		match.setWildcards(~OFMatch.OFPFW_ALL);
+		//		match.setWildcards(((Integer) sw
+		//					.getAttribute(IOFSwitch.PROP_FASTWILDCARDS)).intValue()
+		//					& OFMatch.OFPFW_NW_PROTO
+		//					& OFMatch.OFPFW_NW_SRC_MASK & OFMatch.OFPFW_NW_DST_MASK);
 		rule.setMatch(match);
 
 		// Specify the timeouts for the rule
@@ -452,36 +476,40 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		rule.setHardTimeout(HARD_TIMEOUT);
 
 		// Set the buffer id to NONE -- implementation artifact
-		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-		int actionsLength =  0;
+//		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+		rule.setBufferId(pi.getBufferId());
+		short actionsLength =  0;
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
+		if(rewrite) {
+			// Add action to re-write destination MAC to the MAC of the chosen server
+			byte [] b = server.getMAC().getBytes();
+			OFActionDataLayerDestination rewriteMAC = new OFActionDataLayerDestination(b);
+			System.out.println("RewriteMac "+server.getMAC()+" Byte array "+rewriteMAC.getDataLayerAddress().toString());
+			rewriteMAC.setType(OFActionType.SET_DL_DST);
+			actions.add(rewriteMAC);
+			actionsLength += rewriteMAC.MINIMUM_LENGTH;
+			//actionsLength += rewriteMAC.getLengthU();
+			System.out.println("LenU "+ actionsLength +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
+			System.out.println("Size b: "+b.length+" Action Size: "+ rewriteMAC.getLengthU()+" | "+rewriteMAC.getLength());
+			// Add action to re-write destination IP to the IP of the chosen server
 
-		// Add action to re-write destination MAC to the MAC of the chosen server
-		byte [] b = server.getMAC().getBytes();
-		OFActionDataLayerDestination rewriteMAC = new OFActionDataLayerDestination(b);
-		System.out.println("RewriteMac "+server.getMAC()+" Byte array "+rewriteMAC.getDataLayerAddress().toString());
-		rewriteMAC.setType(OFActionType.SET_DL_DST);
-		actions.add(rewriteMAC);
-		actionsLength += rewriteMAC.getLengthU()+10;
-		System.out.println("LenU "+ actionsLength +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
-		// Add action to re-write destination IP to the IP of the chosen server
-
-
-		OFActionNetworkLayerDestination rewriteIP = new OFActionNetworkLayerDestination(
-				pack(InetAddress.getByName(server.getIP()).getAddress())
-				);
-		rewriteIP.setType( OFActionType.SET_NW_DST);
-		actions.add(rewriteIP);
-		actionsLength += rewriteIP.getLengthU();
-		//System.out.println("actionsU "+ actionsLength+"rewriteIP "+rewriteIP.getLength() +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
-
+			OFActionNetworkLayerDestination rewriteIP = new OFActionNetworkLayerDestination(
+					pack(InetAddress.getByName(server.getIP()).getAddress())
+					);
+			rewriteIP.setType( OFActionType.SET_NW_DST);
+			actions.add(rewriteIP);
+			actionsLength += rewriteIP.getLengthU();
+			//System.out.println("actionsU "+ actionsLength+"rewriteIP "+rewriteIP.getLength() +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
+		}
 		// Add action to output packet
-		OFActionOutput outputTo = new OFActionOutput().setPort((short) 3);
+		OFActionOutput outputTo = new OFActionOutput().setPort(server.getPort());
 		outputTo.setType(OFActionType.OUTPUT );
 		actions.add(outputTo);
-		actionsLength += outputTo.getLengthU();
-		rule.setOutPort((short) 3);
+		actionsLength += outputTo.getLength();
+		rule.setOutPort(server.getPort());
+		System.out.println("Output port:" +server.getPort()+"" +
+				"  Mac: "+topology.getMacFromPort("s"+sw.getId(), server.getPort()));
 
 		// Add actions to rule
 		rule.setActions(actions);
@@ -490,8 +518,9 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 				+ OFActionOutput.MINIMUM_LENGTH);
 		 */
 		// Specify the length of the rule structure
-		rule.setLengthU(OFFlowMod.MINIMUM_LENGTH + actionsLength);
-
+		
+		rule.setLength((short) 1);//(OFFlowMod.MINIMUM_LENGTH + actionsLength));
+		
 		//logger.debug("Actions length="+ (rule.getLength() - destIPOFFlowMod.MINIMUM_LENGTH));
 
 		//logger.debug("Install rule for forward direction for flow: " + rule);
@@ -503,7 +532,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		}	
 
 
-		//pushPacket(sw, pi, actions, actionsLength);
+		//		pushPacket(sw, pi, actions, actionsLength);
 	}
 
 	/**

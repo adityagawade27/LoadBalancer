@@ -7,6 +7,9 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
+
 /**
  * Created by Niket Kandya on 12/9/13.
  */
@@ -20,6 +23,9 @@ public class Topology implements ITopology {
     private ArrayList<Node> switches;
     private HashMap<NodeNodePair, RouteRREntity> routes;
 
+    public final static String LOAD_BALANCER_IP = "10.0.0.254";
+	private final static String LOAD_BALANCER_MAC =  "00:00:00:00:00:FE";
+	
     private static Topology instance;
     
     public HashMap<String, Node> getTopology() {
@@ -82,7 +88,7 @@ public class Topology implements ITopology {
 
 
 		try {
-			url = new File("/home/mininet/LoadBalancer/src/main/edu/columbia/cs6998/sdn/project/sample.output").toURI().toURL();
+			url = new File("/home/mininet/mininet/examples/output.fl").toURI().toURL();
 		} catch (MalformedURLException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
@@ -133,8 +139,15 @@ public class Topology implements ITopology {
         ipToNodeMap.put(node.getIpAddress(),node.getName());
         return node;
     }
-
+    
+    public String getMacFromPort(String name, short port) {
+    	return topology.get(name).getPorts().get(port);
+    }
+    
     public String getMacAddressFromIP(String ipAddress) {
+    	if (ipAddress.equals(LOAD_BALANCER_IP))
+    		return LOAD_BALANCER_MAC;
+   
         Node node = getTopology().get(ipToNodeMap.get(ipAddress));
         ArrayList<String> macAddresses = new ArrayList<>(node.getPorts().values());
         return macAddresses.get(0);
@@ -204,10 +217,7 @@ public class Topology implements ITopology {
     public short getNextHop(String dstIP, String name) {
         Node srcNode = topology.get(name);
         NodeNodePair pair = new NodeNodePair(srcNode, topology.get(ipToNodeMap.get(dstIP)));
-        System.out.println("pair"+pair);
         RouteRREntity routeRREntity = routes.get(pair);
-        System.out.println("MYD: "+dstIP+ srcNode);
-        System.out.println("MYD: RRENTITY"+ routeRREntity);
         List<FinalRoute> finalRoutes = routeRREntity.getRoutes();
         
         if (finalRoutes.size() == 1) {
