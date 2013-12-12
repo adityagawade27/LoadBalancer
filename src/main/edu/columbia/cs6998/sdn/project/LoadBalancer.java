@@ -34,6 +34,7 @@ import org.openflow.protocol.OFPacketOut;
 import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.action.OFAction;
+import org.openflow.protocol.action.OFActionDataLayerDestination;
 import org.openflow.protocol.action.OFActionNetworkLayerDestination;
 import org.openflow.protocol.action.OFActionOutput;
 import org.openflow.protocol.action.OFActionType;
@@ -258,7 +259,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		.setTargetProtocolAddress(IPv4.toIPv4AddressBytes((int)sourceIPAddress))
 		.setPayload(new Data(new byte[] {0x01})));
 		// Send ARP reply.
-		sendPOMessage(arpReply, floodlightProvider.getSwitch(switchId), 
+		sendPOMessage(arpReply, floodlightProvider.getSwitches().get(switchId), 
 				portId);
 		return Command.CONTINUE;
 
