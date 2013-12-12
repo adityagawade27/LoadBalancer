@@ -458,16 +458,15 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
 
-
 		// Add action to re-write destination MAC to the MAC of the chosen server
-		/*byte [] b = server.getMAC().getBytes();
-		OFAction rewriteMAC = new OFActionDataLayerDestination(b);
-		System.out.println("RewriteMac"+server.getMAC()+" Byte arra "+b.length);
+		byte [] b = server.getMAC().getBytes();
+		OFActionDataLayerDestination rewriteMAC = new OFActionDataLayerDestination(b);
+		System.out.println("RewriteMac "+server.getMAC()+" Byte array "+rewriteMAC.getDataLayerAddress().toString());
+		rewriteMAC.setType(OFActionType.SET_DL_DST);
 		actions.add(rewriteMAC);
 		actionsLength += rewriteMAC.getLengthU()+10;
 		System.out.println("LenU "+ actionsLength +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
 		// Add action to re-write destination IP to the IP of the chosen server
-		 */
 
 
 		OFActionNetworkLayerDestination rewriteIP = new OFActionNetworkLayerDestination(
