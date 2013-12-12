@@ -1,6 +1,5 @@
 package main.edu.columbia.cs6998.sdn.project;
 
-import net.floodlightcontroller.packet.IPv4;
 
 public class Server {
 
