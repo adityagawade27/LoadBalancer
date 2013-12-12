@@ -211,9 +211,9 @@ public class Topology implements ITopology {
         List<FinalRoute> finalRoutes = routeRREntity.getRoutes();
         
         if (finalRoutes.size() == 1) {
-            return finalRoutes.get(0).getFirstHop();
+            return finalRoutes.get(0).getFirstHopPort();
         } else {
-            return selectNext(routeRREntity, srcNode).getFirstHop();
+            return selectNext(routeRREntity, srcNode).getFirstHopPort();
         }
     }
 

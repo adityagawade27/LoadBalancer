@@ -2,7 +2,6 @@ package main.edu.columbia.cs6998.sdn.project;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -19,11 +18,11 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Data;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPacket;
 import net.floodlightcontroller.packet.IPv4;
-import net.floodlightcontroller.packet.ARP;
 
 import org.openflow.protocol.OFError;
 import org.openflow.protocol.OFFlowMod;
@@ -35,14 +34,11 @@ import org.openflow.protocol.OFPacketOut;
 import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.action.OFAction;
-import org.openflow.protocol.action.OFActionDataLayerDestination;
-import org.openflow.protocol.action.OFActionNetworkLayerAddress;
 import org.openflow.protocol.action.OFActionNetworkLayerDestination;
 import org.openflow.protocol.action.OFActionOutput;
 import org.openflow.protocol.action.OFActionType;
 import org.openflow.util.HexString;
 import org.openflow.util.U16;
-import org.python.google.common.primitives.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +57,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	// IP and MAC address for our logical load balancer
 	private final static int LOAD_BALANCER_IP = IPv4.toIPv4Address("10.0.0.254");
 	//private final static byte[] LOAD_BALANCER_MAC =  Ethernet.toMACAddress("00:00:00:00:00:FE");
-	private final static byte[] LOAD_BALANCER_MAC =  Ethernet.toMACAddress("d2:49:88:38:ac:6d");
+	private final static byte[] LOAD_BALANCER_MAC =  Ethernet.toMACAddress("66:15:95:e3:33:69");
 
 	// Rule timeouts
 	private final static short IDLE_TIMEOUT = 60; // in seconds
@@ -173,6 +169,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
+			break;
 
 		case FLOW_REMOVED:
 			try {
@@ -180,6 +177,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
+			break;
 
 		case ERROR:
 			logger.info("received an error {} from switch {}", (OFError) msg, sw);
@@ -260,7 +258,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		.setTargetProtocolAddress(IPv4.toIPv4AddressBytes((int)sourceIPAddress))
 		.setPayload(new Data(new byte[] {0x01})));
 		// Send ARP reply.
-		sendPOMessage(arpReply, floodlightProvider.getSwitches().get(switchId), 
+		sendPOMessage(arpReply, floodlightProvider.getSwitch(switchId), 
 				portId);
 		return Command.CONTINUE;
 
@@ -478,16 +476,11 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		//System.out.println("actionsU "+ actionsLength+"rewriteIP "+rewriteIP.getLength() +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
 
 		// Add action to output packet
-		OFActionOutput outputTo = new OFActionOutput().setPort(server.getPort());
+		OFActionOutput outputTo = new OFActionOutput().setPort((short) 3);
 		outputTo.setType(OFActionType.OUTPUT );
 		actions.add(outputTo);
 		actionsLength += outputTo.getLengthU();
-		rule.setOutPort(server.getPort());
-		System.out.println("Port: "+server.getPort());
-		HashMap<String, Node> nodeHashMap = Topology.getInstance().getTopology();
-        System.out.println(nodeHashMap);
-		HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = Topology.getInstance().getRoutes();
-        System.out.println(rrEntityHashMap);
+		rule.setOutPort((short) 3);
 
 		// Add actions to rule
 		rule.setActions(actions);
@@ -504,7 +497,6 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		try {
 			sw.write(rule, null);
-			sw.flush();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}	

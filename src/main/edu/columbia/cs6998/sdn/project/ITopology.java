@@ -65,9 +65,9 @@ class FinalRoute {
         return cost;
     }
 
-    short getFirstHop() {
+    short getFirstHopPort() {
         if (!route.isEmpty())
-            return route.get(0).getDstPort();
+            return route.get(1).getSrcPort();
         else
             return -1; //This should never happen.
     }
@@ -196,7 +196,10 @@ class NodeNodePair {
         String retVal = "(";
         if (srcNode != null)
             retVal += srcNode.getName();
-        retVal += "->" + dstEndHost.getName() + ")";
+        retVal += "->";
+        if (dstEndHost != null) 
+        	retVal += dstEndHost.getName();
+        retVal += ")";
         return retVal;
     }
 
