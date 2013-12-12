@@ -20,6 +20,7 @@ from mininet.log import setLogLevel
 from mininet.net import Mininet
 from mininet.util import ipStr
 from mininet.term import makeTerm, cleanUpScreens
+from mininet.node import RemoteController
 
 
 class Npairs:
@@ -585,7 +586,7 @@ class MiniEdit( Frame ):
     def build( self ):
         "Build network based on our topology."
 
-        net = Mininet( topo=None )
+        net = Mininet(controller=RemoteController, topo=None )
 
         # Make controller
         net.addController( 'c0' )

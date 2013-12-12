@@ -458,6 +458,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
 
+
 		// Add action to re-write destination MAC to the MAC of the chosen server
 		/*byte [] b = server.getMAC().getBytes();
 		OFAction rewriteMAC = new OFActionDataLayerDestination(b);
@@ -478,11 +479,16 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		//System.out.println("actionsU "+ actionsLength+"rewriteIP "+rewriteIP.getLength() +" MIN_LEN "+OFAction.MINIMUM_LENGTH);
 
 		// Add action to output packet
-		OFActionOutput outputTo = new OFActionOutput().setPort((short) 3);
+		OFActionOutput outputTo = new OFActionOutput().setPort(server.getPort());
 		outputTo.setType(OFActionType.OUTPUT );
 		actions.add(outputTo);
 		actionsLength += outputTo.getLengthU();
-		rule.setOutPort((short) 3);
+		rule.setOutPort(server.getPort());
+		System.out.println("Port: "+server.getPort());
+		HashMap<String, Node> nodeHashMap = Topology.getInstance().getTopology();
+        System.out.println(nodeHashMap);
+		HashMap<NodeNodePair, RouteRREntity> rrEntityHashMap = Topology.getInstance().getRoutes();
+        System.out.println(rrEntityHashMap);
 
 		// Add actions to rule
 		rule.setActions(actions);
@@ -499,6 +505,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		try {
 			sw.write(rule, null);
+			sw.flush();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}	
