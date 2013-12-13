@@ -24,7 +24,7 @@ public class Topology implements ITopology {
     private HashMap<NodeNodePair, RouteRREntity> routes;
 
     public final static String LOAD_BALANCER_IP = "10.0.0.254";
-	private final static String LOAD_BALANCER_MAC =  "00:00:00:00:00:FE";
+	public final static String LOAD_BALANCER_MAC =  "00:00:00:00:00:FE";
 	
     private static Topology instance;
     
