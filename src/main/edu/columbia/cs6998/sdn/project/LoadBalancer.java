@@ -20,6 +20,7 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.firewall.WildcardsPair;
 import net.floodlightcontroller.packet.ARP;
 import net.floodlightcontroller.packet.Data;
 import net.floodlightcontroller.packet.Ethernet;
@@ -157,7 +158,8 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	@Override
 	public void startUp(FloodlightModuleContext context) {
 		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
-
+		floodlightProvider.addOFMessageListener(OFType.FLOW_REMOVED, this);
+		floodlightProvider.addOFMessageListener(OFType.ERROR, this);
 	}
 
 	/**
@@ -473,8 +475,9 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		// TODO Implemented round-robin load balancing
 
 		// Create a flow table modification message to add a rule
-		OFFlowMod rule = new OFFlowMod();
-		rule.setType(OFType.FLOW_MOD); 			
+		//OFFlowMod rule = new OFFlowMod();
+		OFFlowMod rule = (OFFlowMod) floodlightProvider.getOFMessageFactory().getMessage(OFType.FLOW_MOD);
+		//rule.setType(OFType.FLOW_MOD); 			
 		rule.setCommand(OFFlowMod.OFPFC_ADD);
 
 		// Create match based on packet
@@ -482,22 +485,31 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		match.loadFromPacket(pi.getPacketData(), pi.getInPort());
 
 		// Match exact flow -- i.e., no wildcards
+		
+		
+      
+    /*
+    // Add flow table entry matching source MAC, dest MAC and input port
+      // that sends to the port we previously learned for the dest MAC.
+      match.setWildcards(((Integer)sw.getAttribute(IOFSwitch.PROP_FASTWILDCARDS)).intValue()
+          & ~OFMatch.OFPFW_IN_PORT
+          & ~OFMatch.OFPFW_DL_SRC & ~OFMatch.OFPFW_DL_DST
+          & ~OFMatch.OFPFW_NW_SRC_MASK & ~OFMatch.OFPFW_NW_DST_MASK);
+		*/
 		match.setWildcards(~OFMatch.OFPFW_ALL);
-		rule.setMatch(match);
-
-		// Specify the timeouts for the rule
-		rule.setIdleTimeout(IDLE_TIMEOUT);
-		rule.setHardTimeout(HARD_TIMEOUT);
-
-		// Set the buffer id to NONE -- implementation artifact
-		//		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-		rule.setBufferId(pi.getBufferId());
-		short len = 0;
+      
+      short len = 0;
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
 
 		if(rewrite == PK_PROC_TYPE.SRC_REWRITE) {
-			len += (short) OFActionDataLayerSource.MINIMUM_LENGTH; 
+		/*
+      match.setWildcards(((Integer)sw.getAttribute(IOFSwitch.PROP_FASTWILDCARDS)).intValue()
+          & ~OFMatch.OFPFW_NW_PROTO
+          & ~OFMatch.OFPFW_NW_SRC_ALL
+          & ~OFMatch.OFPFW_TP_SRC);
+      */
+      len += (short) OFActionDataLayerSource.MINIMUM_LENGTH; 
 
 			// Add action to re-write destination MAC to the MAC of the chosen server
 			byte [] b = Ethernet.toMACAddress(server.getMAC());
@@ -522,9 +534,14 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			actions.add(rewriteTcpport);
 			len+= OFActionTransportLayerSource.MINIMUM_LENGTH;
 
-		} else  
-			if(rewrite == PK_PROC_TYPE.DST_REWRITE) {
-				len += (short) OFActionDataLayerDestination.MINIMUM_LENGTH; 
+		} else  if(rewrite == PK_PROC_TYPE.DST_REWRITE) {
+			/*match.setWildcards(((Integer)sw.getAttribute(IOFSwitch.PROP_FASTWILDCARDS)).intValue()
+			          & ~OFMatch.OFPFW_NW_PROTO
+			          & ~OFMatch.OFPFW_NW_DST_ALL
+			          & ~OFMatch.OFPFW_TP_DST);
+			*/
+			
+			len += (short) OFActionDataLayerDestination.MINIMUM_LENGTH; 
 
 				// Add action to re-write destination MAC to the MAC of the chosen server
 				byte [] b = Ethernet.toMACAddress(server.getMAC());
@@ -547,13 +564,28 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 				actions.add(rewriteTcpport);
 				len += OFActionTransportLayerDestination.MINIMUM_LENGTH;
 			} 
-		// Add action to output packet
+
+    
+    // Add action to output packet
+		if (rewrite == PK_PROC_TYPE.NO_REWRITE)
+			match.setWildcards(~OFMatch.OFPFW_ALL);
+		
 		OFActionOutput outputTo = new OFActionOutput().setPort(server.getPort());
 		outputTo.setType(OFActionType.OUTPUT );
 		actions.add(outputTo);
 		len += OFActionOutput.MINIMUM_LENGTH;
+		
+		rule.setMatch(match);
 
-		rule.setOutPort(server.getPort());
+		// Set the buffer id to NONE -- implementation artifact
+		//		rule.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+		rule.setBufferId(pi.getBufferId());
+		
+    // Specify the timeouts for the rule
+		rule.setIdleTimeout(IDLE_TIMEOUT);
+		rule.setHardTimeout(HARD_TIMEOUT);
+		
+    rule.setOutPort(server.getPort());
 
 		System.out.println("Output port:" +server.getPort()+"" +
 				"  Mac: "+topology.getMacFromPort("s"+sw.getId(), server.getPort()));

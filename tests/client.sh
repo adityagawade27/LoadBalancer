@@ -4,7 +4,7 @@ pcount90=0
 virtual_ip=10.0.0.254
 port1=8080
 port2=9090
-while [ $c -le 20 ]
+while [ $c -le 50 ]
 do
 if [ $(( $RANDOM % 2 )) -eq 0 ]
 then
