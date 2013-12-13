@@ -41,6 +41,8 @@ import org.openflow.protocol.action.OFActionDataLayerSource;
 import org.openflow.protocol.action.OFActionNetworkLayerDestination;
 import org.openflow.protocol.action.OFActionNetworkLayerSource;
 import org.openflow.protocol.action.OFActionOutput;
+import org.openflow.protocol.action.OFActionTransportLayerDestination;
+import org.openflow.protocol.action.OFActionTransportLayerSource;
 import org.openflow.protocol.action.OFActionType;
 import org.openflow.util.HexString;
 import org.openflow.util.U16;
@@ -137,12 +139,19 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	public void initializeAppServers(){
 
 		appServers = new ArrayList<Server>();
-		appServers.add(new Server("10.0.0.1",topology.getMacAddressFromIP("10.0.0.1")));
+		//appServers.add(new Server("10.0.0.1",topology.getMacAddressFromIP("10.0.0.1")));
 		//appServers.add(new Server("10.0.0.5",topology.getMacAddressFromIP("10.0.0.5")));
 		/*appServers.add(new Server("10.0.0.6",topology.getMacAddressFromIP("10.0.0.6")));
 		appServers.add(new Server("10.0.0.7",topology.getMacAddressFromIP("10.0.0.7")));
 		 */
+		for (AppServer app : topology.getAppServList((short) 8080)) {
+			appServers.add(new Server (app.getIp(),topology.getMacAddressFromIP(app.getIp())));
+		}
+		System.out.println("Before initializaiton: Size(hashmap) "+portNumberServersMap.size()
+				+ "Size "+appServers.size());
 		portNumberServersMap.put((short)8080,appServers);
+		System.out.println("After initializaiton: Size(hashmap) "+portNumberServersMap.size()
+				+ "Size "+appServers.size());
 	}
 
 	/*
@@ -363,9 +372,8 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 				short outPort = topology.getNextHop(destIP,"s"+sw.getId());
 				destServer.setPort(outPort);
+				destServer.setTcpPort( topology.getAppServerPort(destIP));
 				rewrite = PK_PROC_TYPE.DST_REWRITE;
-
-
 			}
 
 			else {
@@ -375,11 +383,12 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 				destServer.setIP(curDestIPString);
 				destServer.setMAC(topology.getMacAddressFromIP(curDestIPString));
 				rewrite = PK_PROC_TYPE.NO_REWRITE;
-				
-				if(curSrcIPString.equals("10.0.0.1")){
 
+				short tcpPort = topology.isAppServer(curSrcIPString, match.getTransportSource()) ; 
+				if( tcpPort != -1 ){
 					destServer.setIP(Topology.LOAD_BALANCER_IP);
 					destServer.setMAC(Topology.LOAD_BALANCER_MAC);
+					destServer.setTcpPort(tcpPort);
 					rewrite = PK_PROC_TYPE.SRC_REWRITE;
 				}
 			}
@@ -492,42 +501,58 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		short len = 0;
 		// Initialize list of actions
 		ArrayList<OFAction> actions = new ArrayList<OFAction>();
-		if(rewrite == PK_PROC_TYPE.DST_REWRITE) {
-			len += (short) OFActionDataLayerDestination.MINIMUM_LENGTH; 
 
-			// Add action to re-write destination MAC to the MAC of the chosen server
-			byte [] b = Ethernet.toMACAddress(server.getMAC());
-			OFActionDataLayerDestination rewriteMAC = new OFActionDataLayerDestination(b);
-			rewriteMAC.setType(OFActionType.SET_DL_DST);
-			actions.add(rewriteMAC);
-			// Add action to re-write destination IP to the IP of the chosen server
-
-			OFActionNetworkLayerDestination rewriteIP = new OFActionNetworkLayerDestination(
-					pack(Inet4Address.getByName(server.getIP()).getAddress())
-					);
-
-			rewriteIP.setType( OFActionType.SET_NW_DST);
-			actions.add(rewriteIP);
-			len+= (short) OFActionNetworkLayerDestination.MINIMUM_LENGTH;
-		} 
-		else if(rewrite == PK_PROC_TYPE.SRC_REWRITE) {
+		if(rewrite == PK_PROC_TYPE.SRC_REWRITE) {
 			len += (short) OFActionDataLayerSource.MINIMUM_LENGTH; 
-			System.out.println("Yes Coming here");
+
 			// Add action to re-write destination MAC to the MAC of the chosen server
 			byte [] b = Ethernet.toMACAddress(server.getMAC());
 			OFActionDataLayerSource rewriteMAC = new OFActionDataLayerSource(b);
 			rewriteMAC.setType(OFActionType.SET_DL_SRC);
 			actions.add(rewriteMAC);
-			// Add action to re-write destination IP to the IP of the chosen server
+			System.out.println("SrcMAC"+server.getMAC());
 
+			// Add action to re-write destination IP to the IP of the chosen server
 			OFActionNetworkLayerSource rewriteIP = new OFActionNetworkLayerSource(
 					pack(Inet4Address.getByName(server.getIP()).getAddress())
 					);
-
 			rewriteIP.setType( OFActionType.SET_NW_SRC);
 			actions.add(rewriteIP);
 			len+= (short) OFActionNetworkLayerSource.MINIMUM_LENGTH;
-		}
+
+			System.out.println("SrcIP"+server.getIP());
+
+			OFActionTransportLayerSource rewriteTcpport = new OFActionTransportLayerSource();
+			rewriteTcpport.setTransportPort(server.getTcpPort());
+			rewriteTcpport.setType(OFActionType.SET_TP_SRC);
+			actions.add(rewriteTcpport);
+			len+= OFActionTransportLayerSource.MINIMUM_LENGTH;
+
+		} else  
+			if(rewrite == PK_PROC_TYPE.DST_REWRITE) {
+				len += (short) OFActionDataLayerDestination.MINIMUM_LENGTH; 
+
+				// Add action to re-write destination MAC to the MAC of the chosen server
+				byte [] b = Ethernet.toMACAddress(server.getMAC());
+				OFActionDataLayerDestination rewriteMAC = new OFActionDataLayerDestination(b);
+				rewriteMAC.setType(OFActionType.SET_DL_DST);
+				actions.add(rewriteMAC);
+				// Add action to re-write destination IP to the IP of the chosen server
+
+				OFActionNetworkLayerDestination rewriteIP = new OFActionNetworkLayerDestination(
+						pack(Inet4Address.getByName(server.getIP()).getAddress())
+						);
+
+				rewriteIP.setType( OFActionType.SET_NW_DST);
+				actions.add(rewriteIP);
+				len+= (short) OFActionNetworkLayerDestination.MINIMUM_LENGTH;
+				
+				OFActionTransportLayerDestination rewriteTcpport = new OFActionTransportLayerDestination();
+				rewriteTcpport.setTransportPort(server.getTcpPort());
+				rewriteTcpport.setType(OFActionType.SET_TP_DST);
+				actions.add(rewriteTcpport);
+				len += OFActionTransportLayerDestination.MINIMUM_LENGTH;
+			} 
 		// Add action to output packet
 		OFActionOutput outputTo = new OFActionOutput().setPort(server.getPort());
 		outputTo.setType(OFActionType.OUTPUT );
@@ -535,10 +560,11 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		len += OFActionOutput.MINIMUM_LENGTH;
 
 		rule.setOutPort(server.getPort());
+
 		//		System.out.println("Output port:" +server.getPort()+"" +
 		//				"  Mac: "+topology.getMacFromPort("s"+sw.getId(), server.getPort()));
 
-		// Add actions to rule
+		// Add actions to rule 
 		rule.setActions(actions);
 		rule.setLength((short) (len + 
 				OFFlowMod.MINIMUM_LENGTH));

@@ -6,6 +6,15 @@ public class Server {
 	private String ipAddress;
 	private String macAddress;
 	private short port;
+	private short tcpPort;
+
+	public short getTcpPort() {
+		return tcpPort;
+	}
+
+	public void setTcpPort(short tcpPort) {
+		this.tcpPort = tcpPort;
+	}
 
 	public Server(String ipAddress, String macAddress) {
 		super();
