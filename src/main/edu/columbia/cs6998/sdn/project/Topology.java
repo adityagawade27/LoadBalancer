@@ -2,6 +2,7 @@ package main.edu.columbia.cs6998.sdn.project;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -85,10 +86,8 @@ public class Topology implements ITopology {
     private void readFromFile() {
         URL url=null;
         
-
-
 		try {
-			url = new File("/home/mininet/mininet/examples/output.fl").toURI().toURL();
+			url = new File("/home/mininet/LoadBalancer/info/topology.info").toURI().toURL();
 		} catch (MalformedURLException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();

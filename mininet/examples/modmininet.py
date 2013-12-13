@@ -32,8 +32,8 @@ class Npairs:
     hport = None
     hmac = None
     hIP = None
-    filename = "../../src/main/edu/columbia/cs6998/sdn/project/mininet/topology.info"
-    servers = "../../src/main/edu/columbia/cs6998/sdn/project/mininet/appservers.info"
+    filename = "../../info/topology.info"
+    servers = "../../info/appservers.info"
 
 
     def __init__(self):
