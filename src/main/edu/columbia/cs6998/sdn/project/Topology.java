@@ -102,14 +102,9 @@ public class Topology implements ITopology {
 		BufferedReader reader;
 		try {
 			reader = new BufferedReader(new InputStreamReader(url.openStream()));
-
 			String line = null;
-
 			while ((line = reader.readLine()) != null) {
 				String[] split = line.split(":");
-				System.out.println("split array contents");
-				for (String s: split)
-				System.out.println(s);
 				appServers.add(new AppServer(split[1], Short.parseShort(split[2])));
 			}
 		} catch (IOException e) {
@@ -181,7 +176,7 @@ public class Topology implements ITopology {
 		
 		for(AppServer serv : appServers){
 			//short = serv.getPort();
-			System.out.println(serv.getPort()+" "+serv.getIp());
+//			System.out.println(serv.getPort()+" "+serv.getIp());
 			if(serv.getPortClass() == port) {
 				ret.add(serv);
 			}
@@ -202,7 +197,6 @@ public class Topology implements ITopology {
 	/* Returns the port number if its the app server else returns -1 */
 	public short isAppServer(String ip,short port) {
 		for(AppServer app : appServers) {
-			System.out.println("IP: "+ip+" Port: "+port);
 			if(app.getIp().equals(ip) && app.getPort() == port){
 				return (short) app.getPortClass();
 			}

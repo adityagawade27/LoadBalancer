@@ -137,22 +137,16 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	}
 
 	public void initializeAppServers(){
-
-		appServers = new ArrayList<Server>();
-		//appServers.add(new Server("10.0.0.1",topology.getMacAddressFromIP("10.0.0.1")));
-		//appServers.add(new Server("10.0.0.5",topology.getMacAddressFromIP("10.0.0.5")));
-		/*appServers.add(new Server("10.0.0.6",topology.getMacAddressFromIP("10.0.0.6")));
-		appServers.add(new Server("10.0.0.7",topology.getMacAddressFromIP("10.0.0.7")));
-		 */
 		for (int port: supportedPorts) {
+			appServers = new ArrayList<Server>(); 
 			for (AppServer app : topology.getAppServList((short) port)) {
 				appServers.add(new Server (app.getIp(),topology.getMacAddressFromIP(app.getIp())));
 			}
-			//System.out.println("Before initializaiton: Size(hashmap) "+portNumberServersMap.size()
-			//		+ "Size "+appServers.size());
+//			System.out.println("Before initializaiton: Size(hashmap) "+portNumberServersMap.size()
+//					+ "Size "+appServers.size());
 			portNumberServersMap.put((short)port,appServers);
-			//System.out.println("After initializaiton: Size(hashmap) "+portNumberServersMap.size()
-			//		+ "Size "+appServers.size());
+//			System.out.println("After initializaiton: Size(hashmap) "+portNumberServersMap.size()
+//					+ "Size "+appServers.size());
 		}
 	}
 
