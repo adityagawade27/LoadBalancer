@@ -66,7 +66,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 	// Rule timeouts
 	private final static short IDLE_TIMEOUT = 60; // in seconds
 	private final static short HARD_TIMEOUT = 60; // infinite
-
+	private int[] supportedPorts = { 8080,9090};
 	private Map<Short, ArrayList<Server>> portNumberServersMap= new HashMap<Short, ArrayList<Server>>();
 	private Map<Short, TreeMap<String, Integer>> portServerPacketCountMap;
 	private ArrayList<Server> appServers;
@@ -144,14 +144,16 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 		/*appServers.add(new Server("10.0.0.6",topology.getMacAddressFromIP("10.0.0.6")));
 		appServers.add(new Server("10.0.0.7",topology.getMacAddressFromIP("10.0.0.7")));
 		 */
-		for (AppServer app : topology.getAppServList((short) 8080)) {
-			appServers.add(new Server (app.getIp(),topology.getMacAddressFromIP(app.getIp())));
+		for (int port: supportedPorts) {
+			for (AppServer app : topology.getAppServList((short) port)) {
+				appServers.add(new Server (app.getIp(),topology.getMacAddressFromIP(app.getIp())));
+			}
+			//System.out.println("Before initializaiton: Size(hashmap) "+portNumberServersMap.size()
+			//		+ "Size "+appServers.size());
+			portNumberServersMap.put((short)port,appServers);
+			//System.out.println("After initializaiton: Size(hashmap) "+portNumberServersMap.size()
+			//		+ "Size "+appServers.size());
 		}
-		System.out.println("Before initializaiton: Size(hashmap) "+portNumberServersMap.size()
-				+ "Size "+appServers.size());
-		portNumberServersMap.put((short)8080,appServers);
-		System.out.println("After initializaiton: Size(hashmap) "+portNumberServersMap.size()
-				+ "Size "+appServers.size());
 	}
 
 	/*
@@ -345,9 +347,6 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			arp = (ARP) ethPacket.getPayload();
 
 			if( arp.getOpCode() == ARP.OP_REQUEST ) {
-
-
-
 				return this.handleARPRequest(arp, sw.getId(), pi.getInPort(), cntx);
 			}
 		}	
@@ -386,6 +385,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 				short tcpPort = topology.isAppServer(curSrcIPString, match.getTransportSource()) ; 
 				if( tcpPort != -1 ){
+					System.out.println("Source rewrite happening");
 					destServer.setIP(Topology.LOAD_BALANCER_IP);
 					destServer.setMAC(Topology.LOAD_BALANCER_MAC);
 					destServer.setTcpPort(tcpPort);
@@ -457,7 +457,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 			List<Server> servers = portNumberServersMap.get(appPort);
 			lastServer = (lastServer + 1) % servers.size();
-			System.out.println("Lastserver: "+lastServer);
+
 			return servers.get(lastServer);
 
 		} else { // Get least loaded server
@@ -467,7 +467,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 			Server server = new Server();
 			server.setIP(destIP);
 			server.setMAC(topology.getMacAddressFromIP(destIP));
-			System.out.println("Server: "+server);
+
 			return server;
 
 		}
@@ -546,7 +546,7 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 				rewriteIP.setType( OFActionType.SET_NW_DST);
 				actions.add(rewriteIP);
 				len+= (short) OFActionNetworkLayerDestination.MINIMUM_LENGTH;
-				
+
 				OFActionTransportLayerDestination rewriteTcpport = new OFActionTransportLayerDestination();
 				rewriteTcpport.setTransportPort(server.getTcpPort());
 				rewriteTcpport.setType(OFActionType.SET_TP_DST);
@@ -561,8 +561,8 @@ public class LoadBalancer implements IOFMessageListener, IFloodlightModule {
 
 		rule.setOutPort(server.getPort());
 
-		//		System.out.println("Output port:" +server.getPort()+"" +
-		//				"  Mac: "+topology.getMacFromPort("s"+sw.getId(), server.getPort()));
+		System.out.println("Output port:" +server.getPort()+"" +
+				"  Mac: "+topology.getMacFromPort("s"+sw.getId(), server.getPort()));
 
 		// Add actions to rule 
 		rule.setActions(actions);
